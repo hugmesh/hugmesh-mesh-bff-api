@@ -1,0 +1,289 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "OpenAPI definition",
+    "version" : "v0"
+  },
+  "servers" : [ {
+    "url" : "http://localhost:40551",
+    "description" : "Generated server url"
+  } ],
+  "tags" : [ {
+    "name" : "Mesh directory",
+    "description" : "Cached Meshtastic node/room directory, visibility-gated attribution."
+  }, {
+    "name" : "Bridge sync (internal)",
+    "description" : "SERVICE-PRINCIPAL ONLY: the meshbridge daemon's periodic node/room snapshot push."
+  }, {
+    "name" : "Mesh devices (mine)",
+    "description" : "The caller's own registered mesh devices, with live status."
+  } ],
+  "paths" : {
+    "/bff/mesh/internal/bridge-sync" : {
+      "post" : {
+        "tags" : [ "Bridge sync (internal)" ],
+        "summary" : "Upsert the bridge's full node/room snapshot (tolerant/clamped; malformed rows are skipped, never a 4xx for the whole request).",
+        "operationId" : "bridgeSync",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BridgeSyncRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Snapshot applied",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : {
+                    "type" : "object"
+                  }
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Unauthenticated"
+          },
+          "403" : {
+            "description" : "Caller lacks ROLE_SERVICE"
+          }
+        }
+      }
+    },
+    "/bff/mesh/status/{nodeId}" : {
+      "get" : {
+        "tags" : [ "Mesh directory" ],
+        "summary" : "One node's status, visibility-gated exactly as GET /bff/mesh/nodes.",
+        "operationId" : "status",
+        "parameters" : [ {
+          "name" : "nodeId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Node status returned",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MeshNodeView"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Unauthenticated"
+          },
+          "403" : {
+            "description" : "Caller lacks ROLE_MESH/ROLE_ADMIN/ROLE_SUPERADMIN"
+          },
+          "404" : {
+            "description" : "Node not known to the directory"
+          }
+        }
+      }
+    },
+    "/bff/mesh/rooms" : {
+      "get" : {
+        "tags" : [ "Mesh directory" ],
+        "summary" : "Mesh-enabled rooms known to the bridge, domain-scoped.",
+        "operationId" : "rooms",
+        "responses" : {
+          "200" : {
+            "description" : "Room list returned",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : {
+                    "type" : "object"
+                  }
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Unauthenticated"
+          },
+          "403" : {
+            "description" : "Caller lacks ROLE_MESH/ROLE_ADMIN/ROLE_SUPERADMIN"
+          }
+        }
+      }
+    },
+    "/bff/mesh/nodes" : {
+      "get" : {
+        "tags" : [ "Mesh directory" ],
+        "summary" : "The cached mesh node directory. Anonymous nodes are always listed without attribution; a registered node's owner localpart + live status is shown only when the owner's visibility setting permits the caller (see the README's Visibility v1 section).",
+        "operationId" : "nodes",
+        "responses" : {
+          "200" : {
+            "description" : "Node directory returned",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : {
+                    "type" : "object"
+                  }
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Unauthenticated"
+          },
+          "403" : {
+            "description" : "Caller lacks ROLE_MESH/ROLE_ADMIN/ROLE_SUPERADMIN"
+          }
+        }
+      }
+    },
+    "/bff/mesh/devices/mine" : {
+      "get" : {
+        "tags" : [ "Mesh devices (mine)" ],
+        "summary" : "The caller's own registered mesh devices (per user-bff) with live status joined in from this BFF's directory cache when known.",
+        "operationId" : "mine",
+        "responses" : {
+          "200" : {
+            "description" : "Device list returned",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : {
+                    "type" : "object"
+                  }
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Unauthenticated"
+          },
+          "403" : {
+            "description" : "Caller lacks ROLE_MESH/ROLE_ADMIN/ROLE_SUPERADMIN"
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "BridgeNode" : {
+        "type" : "object",
+        "properties" : {
+          "nodeId" : {
+            "type" : "string"
+          },
+          "longName" : {
+            "type" : "string"
+          },
+          "shortName" : {
+            "type" : "string"
+          },
+          "lastSeenAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "batteryPct" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "snr" : {
+            "type" : "number",
+            "format" : "float"
+          },
+          "hopsAway" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "viaDevice" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BridgeRoom" : {
+        "type" : "object",
+        "properties" : {
+          "roomId" : {
+            "type" : "string"
+          },
+          "device" : {
+            "type" : "string"
+          },
+          "meshChannel" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "BridgeSyncRequest" : {
+        "type" : "object",
+        "properties" : {
+          "nodes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BridgeNode"
+            }
+          },
+          "rooms" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BridgeRoom"
+            }
+          }
+        }
+      },
+      "MeshNodeView" : {
+        "type" : "object",
+        "properties" : {
+          "nodeId" : {
+            "type" : "string"
+          },
+          "longName" : {
+            "type" : "string"
+          },
+          "shortName" : {
+            "type" : "string"
+          },
+          "lastSeenAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "batteryPct" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "snr" : {
+            "type" : "number",
+            "format" : "float"
+          },
+          "hopsAway" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "viaDevice" : {
+            "type" : "string"
+          },
+          "online" : {
+            "type" : "boolean"
+          },
+          "registeredTo" : {
+            "type" : "string"
+          }
+        }
+      }
+    }
+  }
+}

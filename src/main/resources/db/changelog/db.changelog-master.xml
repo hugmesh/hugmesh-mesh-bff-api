@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      snapdragon-mesh-bff-api's Liquibase changelog history — the platform's
+      numeric-prefix + kebab-case-slug convention (mirrors mod-bff-api /
+      admin-bff-api): the changeSet id is "<number>-<slug>" matching the filename
+      minus extension, author is always the literal "snapdragon".
+
+      001-mesh-node-directory.xml   mesh_node_directory table (the radio telemetry
+                                     directory.MeshDirectoryCache reloads from) + the
+                                     canonical node-id-shape CHECK (Postgres-only).
+      002-mesh-room.xml             mesh_room table (the bridge's room<->device/channel
+                                     mapping directory.MeshDirectoryCache also reloads).
+    -->
+    <include file="db/changelog/001-mesh-node-directory.xml"/>
+    <include file="db/changelog/002-mesh-room.xml"/>
+</databaseChangeLog>

@@ -1,0 +1,36 @@
+# Test profile: no live datastore / Casdoor / user-bff / Cassandra.
+#
+# The slice + context-load tests provide their own wiring:
+#   - the R2DBC directory repository slice (@DataR2dbcTest) imports its own
+#     Testcontainers-backed Postgres config (mirrors mod-bff-api's
+#     ModActionRepositoryTest / commons PostgresTestSupport) — the REAL changelog
+#     needs genuine Postgres DDL (regex CHECK constraint), so this profile's H2
+#     fallback below is NOT used by that test;
+#   - the @WebFluxTest security-matrix tests mock a ReactiveJwtDecoder;
+#   - the OpenApiSpecDumpTest / context-load test uses the throwaway H2 store below
+#     purely so the full Spring context can boot without a real Postgres.
+#
+# Disabling Liquibase + supplying a throwaway in-mem R2DBC URL keeps any
+# full-context boot in this profile from touching a real database.
+spring:
+  liquibase:
+    enabled: false
+  r2dbc:
+    url: "r2dbc:h2:mem:///meshbff_ctx;DB_CLOSE_DELAY=-1;MODE=PostgreSQL"
+    username: sa
+    password: ""
+
+# Stub outbound base URLs — no test in this profile makes a real call (the
+# WebClient/beans are mocked or simply never invoked); these just keep the beans
+# wireable in a full-context boot.
+app:
+  mesh:
+    user-bff:
+      enabled: false
+      base-url: "http://localhost:0"
+  casdoor:
+    systems:
+      base-url: "http://localhost:0"
+  mirror:
+    cassandra:
+      enabled: false
