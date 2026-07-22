@@ -7,39 +7,39 @@
   <!-- The org metapom — consolidates the Spring Boot 4.0.7 / Spring Cloud 2025.1.2 / Java 25 LTS reactive BFF
        baseline (WebFlux + Casdoor OAuth2 resource server + R2DBC/Liquibase +
        SpringDoc) as shared <dependencies>, the dependencyManagement
-       (snapdragon-commons, AWS SDK BOM, resilience4j, springdoc version pins), and the
+       (hugmesh-commons, AWS SDK BOM, resilience4j, springdoc version pins), and the
        pluginManagement (compiler / surefire bytebuddy flag / spring-boot / native).
-       snapdragon-parent is itself a child of spring-boot-starter-parent:3.5.5, so the
+       hugmesh-parent is itself a child of spring-boot-starter-parent:3.5.5, so the
        Spring Boot dependency + plugin management is inherited TRANSITIVELY. -->
   <parent>
-    <groupId>systems.snapdragon</groupId>
-    <artifactId>snapdragon-parent</artifactId>
-    <version>2.7.0</version>
+    <groupId>systems.hugmesh</groupId>
+    <artifactId>hugmesh-parent</artifactId>
+    <version>2.8.0</version>
     <relativePath/>
   </parent>
 
   <!-- NO -api suffix in the artifactId; the -api lives only in the repo / service
-       / image name (snapdragon-mesh-bff-api), mirroring mod-bff/admin-bff. -->
+       / image name (hugmesh-mesh-bff-api), mirroring mod-bff/admin-bff. -->
   <artifactId>mesh-bff</artifactId>
   <version>0.1.0</version>
 
   <dependencies>
-    <!-- The shared, canonical Snapdragon security/tenancy/config/web building blocks
+    <!-- The shared, canonical HugMesh security/tenancy/config/web building blocks
          (Casdoor JWT authorities, issuer->domain DomainRegistry, Roles + PrincipalDomain
          helpers, the config-gated multi-issuer TenancyResourceServerConfig, the BFF
-         ApiException). Version is MANAGED by snapdragon-parent's dependencyManagement,
+         ApiException). Version is MANAGED by hugmesh-parent's dependencyManagement,
          so NO <version> here. -->
     <dependency>
-      <groupId>systems.snapdragon</groupId>
-      <artifactId>snapdragon-commons</artifactId>
+      <groupId>systems.hugmesh</groupId>
+      <artifactId>hugmesh-commons</artifactId>
     </dependency>
 
     <!-- commons test-support base classes (PostgresTestSupport) for full-context
          Testcontainers-backed integration tests. -->
     <dependency>
-      <groupId>systems.snapdragon</groupId>
-      <artifactId>snapdragon-commons</artifactId>
-      <version>2.0.0</version>
+      <groupId>systems.hugmesh</groupId>
+      <artifactId>hugmesh-commons</artifactId>
+      <version>2.1.0</version>
       <classifier>tests</classifier>
       <scope>test</scope>
     </dependency>
@@ -60,18 +60,18 @@
          oauth2-resource-server / validation), the data-access stack (data-r2dbc /
          r2dbc-postgresql / liquibase-core / spring-jdbc / postgresql), springdoc and
          the whole test stack (spring-boot-starter-test / reactor-test /
-         spring-security-test / r2dbc-h2 / h2) are INHERITED from snapdragon-parent's
+         spring-security-test / r2dbc-h2 / h2) are INHERITED from hugmesh-parent's
          common <dependencies>. ONLY the repo-specific dependencies below remain.
          ============================================================================ -->
 
     <!-- resilience4j circuit breaker (reactive) — guards the Postgres/Cassandra cache
          reload legs (node directory + devices-mine) and the outbound user-bff call.
          Repo-specific (NOT in the parent's common <dependencies>); version is
-         MANAGED by snapdragon-parent's dependencyManagement so no <version> here.
+         MANAGED by hugmesh-parent's dependencyManagement so no <version> here.
          DELIBERATELY no resilience4j-spring-boot4 here (unlike mod-bff-api, which
          uses the @CircuitBreaker AOP-annotation mechanism that module provides): this
          repo exclusively uses the ReactiveCircuitBreakerFactory/Customizer shape
-         (config.CacheResilienceConfig, cloned from snapdragon-gateway's
+         (config.CacheResilienceConfig, cloned from hugmesh-gateway's
          GatewayResilienceConfig), and resilience4j-spring-boot4's auto-configuration
          collides with spring-cloud-starter-circuitbreaker-reactor-resilience4j's own
          transitive resilience4j-spring-boot3 auto-configuration (both register a bean
@@ -94,7 +94,7 @@
 
     <!-- Raw DataStax/Apache Cassandra Java driver — the best-effort write-through
          mirror + fallback-read leg for the node-directory cache (mesh_node_directory
-         + mesh_room), cloned from snapdragon-admin-bff-api's
+         + mesh_room), cloned from hugmesh-admin-bff-api's
          routeaccess/CassandraRouteMirror.java + cassandra/CassandraSessionFactory.java
          shape. Deliberately the SAME client stack admin-bff uses (not the
          spring-boot-starter-data-cassandra-reactive gateway uses for its OWN mirror) —
@@ -110,7 +110,7 @@
 
   <build><plugins>
     <!-- The spring-boot, native and surefire (bytebuddy-experimental argLine)
-         plugins are configured in snapdragon-parent's pluginManagement; declaring
+         plugins are configured in hugmesh-parent's pluginManagement; declaring
          them here (no config) binds the managed config. The native plugin is bound
          so `./mvnw -Pnative native:compile` works; spring-boot repackages the app. -->
     <plugin>
