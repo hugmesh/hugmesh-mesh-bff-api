@@ -1,6 +1,6 @@
 spring:
   application:
-    name: snapdragon-mesh-bff-api
+    name: hugmesh-mesh-bff-api
   security:
     oauth2:
       resourceserver:
@@ -10,7 +10,7 @@ spring:
           issuer-uri: "${CASDOOR_ISSUER_URI:https://id.snapdragon.systems}"
           # Explicit JWKS so the resource server does NOT do OIDC discovery against
           # issuer-uri (unreachable in-container when issuer-uri is the browser-facing
-          # host). Mirrors every other Snapdragon BFF.
+          # host). Mirrors every other HugMesh BFF.
           jwk-set-uri: "${CASDOOR_JWKS_URI:${CASDOOR_ISSUER_URI:https://id.snapdragon.systems}/.well-known/jwks}"
 
   # Runtime data access is REACTIVE (R2DBC) over this BFF's OWN datastore — it owns
@@ -38,7 +38,7 @@ app:
 
   mesh:
     # directory.MeshDirectoryCache's Postgres (+ Cassandra fallback) reload tick —
-    # the sanctioned snapdragon-gateway GatewayRouteAccessService cadence.
+    # the sanctioned hugmesh-gateway GatewayRouteAccessService cadence.
     cache:
       refresh-interval-ms: "${APP_MESH_CACHE_REFRESH_INTERVAL_MS:5000}"
     # devices.RegistrationCache's reload of user-bff's full mesh-devices mapping.
@@ -57,8 +57,8 @@ app:
 
   # Casdoor client-credentials client this BFF mints its OWN outbound ROLE_SERVICE
   # bearer from (to call user-bff's internal surface) — the SAME
-  # app.casdoor.systems.* namespace snapdragon-admin-bff-api's
-  # UserBffNotificationConfig / snapdragon-actions' FederationUsernameClientConfig
+  # app.casdoor.systems.* namespace hugmesh-admin-bff-api's
+  # UserBffNotificationConfig / hugmesh-actions' FederationUsernameClientConfig
   # use for the identical client_credentials mint, so one Casdoor application
   # (provisioned manually — see manifests/external-secrets/mesh-bff-externalsecrets.yaml
   # in the generator repo) can be reused/paralleled across services.
@@ -73,7 +73,7 @@ app:
   # GATED, default OFF: when false, directory.NoopDirectoryMirror wins
   # (@ConditionalOnMissingBean) and the cache runs Postgres-only — degrades cleanly,
   # never a startup failure. Same property namespace as
-  # snapdragon-admin-bff-api's routeaccess mirror (app.mirror.cassandra.*), so one
+  # hugmesh-admin-bff-api's routeaccess mirror (app.mirror.cassandra.*), so one
   # Cassandra credential/TLS ESO Secret set configures every writer identically.
   mirror:
     cassandra:
@@ -100,12 +100,12 @@ app:
 # (truststore.p12) on the outbound call to user-bff's internal surface. REUSES the
 # same SSL_* env the server-side stores use (one mounted /stores layout serves
 # both directions). DEFAULT OFF: local/dev/CI (plain http, no stores) is
-# unaffected; the in-cluster deployment sets SNAPDRAGON_MTLS_CLIENT_ENABLED=true
+# unaffected; the in-cluster deployment sets HUGMESH_MTLS_CLIENT_ENABLED=true
 # alongside the server-side SSL_CLIENT_AUTH=need below.
-snapdragon:
+hugmesh:
   mtls:
     client:
-      enabled: "${SNAPDRAGON_MTLS_CLIENT_ENABLED:false}"
+      enabled: "${HUGMESH_MTLS_CLIENT_ENABLED:false}"
       key-store: "${SSL_KEY_STORE:/stores/keystore.p12}"
       key-store-type: "${SSL_KEY_STORE_TYPE:PKCS12}"
       key-store-password: "${SSL_KEY_STORE_PASSWORD:}"
@@ -157,9 +157,9 @@ springdoc:
     enabled: true
     path: /v3/api-docs
     # Pin to OpenAPI 3.0 — springdoc-openapi 3.x (Boot 4) defaults to 3.1.0, whose
-    # `type` arrays break ng-openapi-gen 0.51.0. Mirrors every other Snapdragon BFF.
+    # `type` arrays break ng-openapi-gen 0.51.0. Mirrors every other HugMesh BFF.
     version: openapi_3_0
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
-  packages-to-scan: systems.snapdragon.meshbff
+  packages-to-scan: systems.hugmesh.meshbff
