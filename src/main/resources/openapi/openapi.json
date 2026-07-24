@@ -5,7 +5,7 @@
     "version" : "v0"
   },
   "servers" : [ {
-    "url" : "http://localhost:40551",
+    "url" : "http://localhost:37669",
     "description" : "Generated server url"
   } ],
   "tags" : [ {
