@@ -6,10 +6,15 @@
             http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
 
     <!--
-      snapdragon-mesh-bff-api's Liquibase changelog history — the platform's
+      hugmesh-mesh-bff-api's Liquibase changelog history — the platform's
       numeric-prefix + kebab-case-slug convention (mirrors mod-bff-api /
       admin-bff-api): the changeSet id is "<number>-<slug>" matching the filename
-      minus extension, author is always the literal "snapdragon".
+      minus extension, author is always the literal "snapdragon". NOTE: kept as
+      "snapdragon" (not renamed to "hugmesh") deliberately — id+author+filename
+      is Liquibase's immutable changeset identity key, and any environment
+      where these changeSets already ran has that value recorded in its
+      DATABASECHANGELOG table; changing it would make Liquibase treat an
+      already-applied changeSet as new. See the HugMesh rebrand PR description.
 
       001-mesh-node-directory.xml   mesh_node_directory table (the radio telemetry
                                      directory.MeshDirectoryCache reloads from) + the

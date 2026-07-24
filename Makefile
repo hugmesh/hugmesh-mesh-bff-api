@@ -1,4 +1,4 @@
-# Snapdragon mod BFF API — developer make targets.
+# HugMesh mod BFF API — developer make targets.
 #
 # `make pentest` mirrors the centralized OWASP pen-test CI stage
 # (.gitlab-ci.yml -> generator /tests/pentest/ci/pentest-stage.gitlab-ci.yml)
@@ -19,8 +19,8 @@ JDK_IMAGE       ?= eclipse-temurin:21-jdk-noble
 # Fail the local SCA build on a CVSS >= this (CI uses 9 for the gating mvn run).
 SCA_FAIL_CVSS   ?= 9
 # Where the generator pen-test harness lives (run-pentest.sh). Override if your
-# checkout layout differs. Sibling Snapdragon-Systems checkout is the default.
-PENTEST_HARNESS_DIR ?= ../snapdragon-generator/tests/pentest
+# checkout layout differs. Sibling HugMesh checkout is the default.
+PENTEST_HARNESS_DIR ?= ../hugmesh-generator/tests/pentest
 # Set to the running app's base URL to actually drive the DAST harness, e.g.
 #   make pentest DAST_TARGET_URL=http://localhost:8080
 DAST_TARGET_URL ?=
@@ -70,6 +70,6 @@ pentest-dast:
 	else \
 		echo "    harness not found at $(PENTEST_HARNESS_DIR)/run-pentest.sh"; \
 		echo "    clone it alongside this repo, e.g.:"; \
-		echo "      git clone https://github.com/Snapdragon-Systems/snapdragon-generator ../snapdragon-generator"; \
+		echo "      git clone https://github.com/HugMesh/hugmesh-generator ../hugmesh-generator"; \
 		echo "    then re-run; or point PENTEST_HARNESS_DIR at your checkout."; \
 	fi
