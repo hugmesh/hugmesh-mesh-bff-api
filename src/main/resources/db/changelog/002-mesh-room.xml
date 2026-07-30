@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!-- mesh_room — one row per Matrix room the meshbridge daemon has mapped to a
+         Meshtastic device/channel pair (mirrors the bridge's own in-memory
+         bridge.mappings). room_id is the bridge's own Matrix room id (app-assigned,
+         never database-generated) — same upsert-via-explicit-SQL rationale as
+         mesh_node_directory (see directory.MeshNodeDirectoryDao). -->
+    <changeSet id="002-mesh-room" author="hugmesh">
+        <createTable tableName="mesh_room">
+            <column name="room_id" type="varchar(255)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="device" type="varchar(64)"/>
+            <column name="mesh_channel" type="int"/>
+            <column name="domain" type="varchar(255)" defaultValue="default">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="mesh_room" indexName="idx_mesh_room_domain">
+            <column name="domain"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

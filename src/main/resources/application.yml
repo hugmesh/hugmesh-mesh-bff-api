@@ -1,0 +1,165 @@
+spring:
+  application:
+    name: hugmesh-mesh-bff-api
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # The Casdoor issuer (id.hugmesh.systems) the fe-gateway mints JWTs
+          # against; the resource-server validates the forwarded bearer here too.
+          issuer-uri: "${CASDOOR_ISSUER_URI:https://id.hugmesh.systems}"
+          # Explicit JWKS so the resource server does NOT do OIDC discovery against
+          # issuer-uri (unreachable in-container when issuer-uri is the browser-facing
+          # host). Mirrors every other HugMesh BFF.
+          jwk-set-uri: "${CASDOOR_JWKS_URI:${CASDOOR_ISSUER_URI:https://id.hugmesh.systems}/.well-known/jwks}"
+
+  # Runtime data access is REACTIVE (R2DBC) over this BFF's OWN datastore — it owns
+  # exactly two tables, mesh_node_directory + mesh_room. It never touches any other
+  # service's database (user-bff's mesh_device table is read ONLY over HTTP, via
+  # devices.UserBffMeshDeviceClient).
+  r2dbc:
+    url: "${SPRING_R2DBC_URL:r2dbc:postgresql://mesh-bff-db.hugmesh-backend.svc.cluster.local:5432/meshbff}"
+    username: "${SPRING_R2DBC_USERNAME:meshbff}"
+    password: "${SPRING_R2DBC_PASSWORD:}"
+
+  # Liquibase owns schema migrations. It has NO R2DBC runner, so it uses a plain
+  # JDBC datasource — the ONLY JDBC use in the app; all runtime access is R2DBC.
+  liquibase:
+    enabled: true
+    change-log: "classpath:db/changelog/db.changelog-master.xml"
+    url: "${SPRING_LIQUIBASE_URL:jdbc:postgresql://mesh-bff-db.hugmesh-backend.svc.cluster.local:5432/meshbff}"
+    user: "${SPRING_LIQUIBASE_USER:meshbff}"
+    password: "${SPRING_LIQUIBASE_PASSWORD:}"
+
+app:
+  # Per-brand Casdoor issuers for multi-tenant mode. OPT-IN: empty = single-issuer.
+  tenancy:
+    issuers: "${APP_TENANCY_ISSUERS:}"
+
+  mesh:
+    # directory.MeshDirectoryCache's Postgres (+ Cassandra fallback) reload tick —
+    # the sanctioned hugmesh-gateway GatewayRouteAccessService cadence.
+    cache:
+      refresh-interval-ms: "${APP_MESH_CACHE_REFRESH_INTERVAL_MS:5000}"
+    # devices.RegistrationCache's reload of user-bff's full mesh-devices mapping.
+    devices-cache:
+      refresh-interval-ms: "${APP_MESH_DEVICES_CACHE_REFRESH_INTERVAL_MS:60000}"
+    # GET /bff/mesh/nodes' `online` derivation: lastSeenAt within this many seconds.
+    node-online-window-seconds: "${APP_MESH_NODE_ONLINE_WINDOW_SECONDS:300}"
+    # devices.UserBffMeshDeviceClient — the outbound call to user-bff's internal
+    # mesh-devices surface. GATED, default OFF so a user-bff-less dev/test/CI run
+    # boots clean (RegistrationCache then just serves an empty mapping — every node
+    # in the directory reads as anonymous). The in-cluster deployment flips this on
+    # once the mTLS store + Casdoor SERVICE client credentials are provisioned.
+    user-bff:
+      enabled: "${APP_MESH_USER_BFF_ENABLED:false}"
+      base-url: "${APP_MESH_USER_BFF_BASE_URL:https://hugmesh-user-bff-api.hugmesh-backend.svc.cluster.local:8080/bff/user/internal/mesh-devices}"
+
+  # Casdoor client-credentials client this BFF mints its OWN outbound ROLE_SERVICE
+  # bearer from (to call user-bff's internal surface) — the SAME
+  # app.casdoor.systems.* namespace hugmesh-admin-bff-api's
+  # UserBffNotificationConfig / hugmesh-actions' FederationUsernameClientConfig
+  # use for the identical client_credentials mint, so one Casdoor application
+  # (provisioned manually — see manifests/external-secrets/mesh-bff-externalsecrets.yaml
+  # in the generator repo) can be reused/paralleled across services.
+  casdoor:
+    systems:
+      base-url: "${APP_CASDOOR_SYSTEMS_BASE_URL:}"
+      client-id: "${APP_CASDOOR_SYSTEMS_CLIENT_ID:}"
+      client-secret: "${APP_CASDOOR_SYSTEMS_CLIENT_SECRET:}"
+
+  # Best-effort Cassandra write-through mirror + fallback-read for the node/room
+  # directory (directory.CassandraDirectoryMirror / directory.NoopDirectoryMirror).
+  # GATED, default OFF: when false, directory.NoopDirectoryMirror wins
+  # (@ConditionalOnMissingBean) and the cache runs Postgres-only — degrades cleanly,
+  # never a startup failure. Same property namespace as
+  # hugmesh-admin-bff-api's routeaccess mirror (app.mirror.cassandra.*), so one
+  # Cassandra credential/TLS ESO Secret set configures every writer identically.
+  mirror:
+    cassandra:
+      enabled: "${APP_MIRROR_CASSANDRA_ENABLED:false}"
+      contact-point: "${CASSANDRA_CONTACT_POINT:cassandra.hugmesh-pki.svc.cluster.local:9042}"
+      local-dc: "${CASSANDRA_LOCAL_DC:dc1}"
+      keyspace: "${CASSANDRA_KEYSPACE:hugmesh_mesh}"
+      auth:
+        enabled: "${CASSANDRA_AUTH_ENABLED:false}"
+        username: "${CASSANDRA_USERNAME:}"
+        password: "${CASSANDRA_PASSWORD:}"
+      ssl:
+        enabled: "${CASSANDRA_SSL_ENABLED:false}"
+        trust-store: "${CASSANDRA_TRUST_STORE:/stores/cassandra-truststore.p12}"
+        trust-store-type: "${CASSANDRA_TRUST_STORE_TYPE:PKCS12}"
+        trust-store-password: "${CASSANDRA_TRUST_STORE_PASSWORD:}"
+        key-store: "${CASSANDRA_KEY_STORE:}"
+        key-store-type: "${CASSANDRA_KEY_STORE_TYPE:PKCS12}"
+        key-store-password: "${CASSANDRA_KEY_STORE_PASSWORD:}"
+
+# ── API-to-API mTLS (CLIENT side / OUTBOUND) ─────────────────────────────────
+# devices.UserBffHttpClientSsl builds a reactor-netty connector that presents this
+# BFF's PKI client identity (keystore.p12) and trusts the cluster CA
+# (truststore.p12) on the outbound call to user-bff's internal surface. REUSES the
+# same SSL_* env the server-side stores use (one mounted /stores layout serves
+# both directions). DEFAULT OFF: local/dev/CI (plain http, no stores) is
+# unaffected; the in-cluster deployment sets HUGMESH_MTLS_CLIENT_ENABLED=true
+# alongside the server-side SSL_CLIENT_AUTH=need below.
+hugmesh:
+  mtls:
+    client:
+      enabled: "${HUGMESH_MTLS_CLIENT_ENABLED:false}"
+      key-store: "${SSL_KEY_STORE:/stores/keystore.p12}"
+      key-store-type: "${SSL_KEY_STORE_TYPE:PKCS12}"
+      key-store-password: "${SSL_KEY_STORE_PASSWORD:}"
+      trust-store: "${SSL_TRUST_STORE:/stores/truststore.p12}"
+      trust-store-type: "${SSL_TRUST_STORE_TYPE:PKCS12}"
+      trust-store-password: "${SSL_TRUST_STORE_PASSWORD:}"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+server:
+  port: 8080
+  # ── API-to-API mTLS enforcement (server side) ──────────────────────────────
+  # When the in-cluster keystore initContainer is mounted (the gateway-chart
+  # build-keystore equivalent: PKCS12 keystore.p12 = this service's Vault-PKI
+  # identity + truststore.p12 = the cluster CA), the deployment flips these on so
+  # the TLS handshake REQUIRES a client cert that chains to the cluster CA.
+  #
+  # Defaults keep local/dev/CI working: ssl.enabled=false (plaintext) and
+  # client-auth=none. In-cluster, the deployment sets SSL_ENABLED=true,
+  # SSL_CLIENT_AUTH=need and points the key-store/trust-store at the mounted
+  # PKCS12 stores (default paths below match the gateway chart's /stores layout).
+  ssl:
+    enabled: "${SSL_ENABLED:false}"
+    client-auth: "${SSL_CLIENT_AUTH:none}"
+    key-store: "${SSL_KEY_STORE:/stores/keystore.p12}"
+    key-store-type: "${SSL_KEY_STORE_TYPE:PKCS12}"
+    key-store-password: "${SSL_KEY_STORE_PASSWORD:}"
+    trust-store: "${SSL_TRUST_STORE:/stores/truststore.p12}"
+    trust-store-type: "${SSL_TRUST_STORE_TYPE:PKCS12}"
+    trust-store-password: "${SSL_TRUST_STORE_PASSWORD:}"
+    # TLSv1.3 floor (forward-secret, AEAD-only) — matches the gateway chart.
+    enabled-protocols: "${SSL_ENABLED_PROTOCOLS:TLSv1.3}"
+
+# SpringDoc OpenAPI. The spec at /v3/api-docs is the source the platform
+# ng-openapi-gen typed clients + the docs pipeline consume. Spec + UI are gated by
+# SecurityConfig: permitAll under dev/test (so `gen:fetch` can curl the spec
+# without a token) and ROLE_ADMIN/SUPERADMIN otherwise (prod).
+springdoc:
+  default-produces-media-type: application/json
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+    # Pin to OpenAPI 3.0 — springdoc-openapi 3.x (Boot 4) defaults to 3.1.0, whose
+    # `type` arrays break ng-openapi-gen 0.51.0. Mirrors every other HugMesh BFF.
+    version: openapi_3_0
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  packages-to-scan: systems.hugmesh.meshbff

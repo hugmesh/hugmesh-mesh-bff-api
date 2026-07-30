@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!-- mesh_node_directory — one row per Meshtastic radio the meshbridge daemon has
+         ever reported, independent of whether it is claimed by a platform user (that
+         mapping lives in user-bff's mesh_device table, joined at READ time via the
+         internal ROLE_SERVICE surface — never written here). SOURCE OF TRUTH for
+         directory.MeshDirectoryCache's Postgres reload; the Cassandra mirror is a
+         best-effort read-optimization + fallback-of-last-resort ONLY (see
+         directory.CassandraDirectoryMirror). node_id is app-assigned (the bridge's own
+         canonical radio id), never database-generated, so writes go through
+         directory.MeshNodeDirectoryDao's explicit upsert SQL, not a plain repository
+         save(). -->
+    <changeSet id="001-mesh-node-directory" author="hugmesh">
+        <createTable tableName="mesh_node_directory">
+            <column name="node_id" type="varchar(16)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="long_name" type="varchar(64)"/>
+            <column name="short_name" type="varchar(8)"/>
+            <column name="last_seen_at" type="timestamp"/>
+            <column name="battery_pct" type="int"/>
+            <column name="snr" type="real"/>
+            <column name="hops_away" type="int"/>
+            <column name="via_device" type="varchar(64)"/>
+            <column name="domain" type="varchar(255)" defaultValue="default">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="mesh_node_directory" indexName="idx_mesh_node_directory_domain">
+            <column name="domain"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- CHECK: node_id is the canonical "!"+8-lowercase-hex form. The app-layer
+         normalization (sync.BridgeSyncService#normalizeNodeId) is the primary guard
+         (tolerant of case/missing "!" on input, folding to this canonical shape before
+         it ever reaches this table); this DB-level CHECK is defence-in-depth against
+         any OTHER write path this table ever grows. -->
+    <changeSet id="001b-mesh-node-directory-id-check" author="hugmesh">
+        <!-- Postgres-only regex operator (~); the H2 (PG-compat) slice-test store does
+             not support it identically, so this changeset is gated to Postgres and
+             MARK_RAN elsewhere — the app-layer guard is still authoritative everywhere.
+             preConditions MUST be the first child element of changeSet (XSD-enforced). -->
+        <preConditions onFail="MARK_RAN">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sql>
+            ALTER TABLE mesh_node_directory
+                ADD CONSTRAINT ck_mesh_node_directory_id
+                CHECK (node_id ~ '^![0-9a-f]{8}$')
+        </sql>
+        <rollback>ALTER TABLE mesh_node_directory DROP CONSTRAINT ck_mesh_node_directory_id</rollback>
+    </changeSet>
+</databaseChangeLog>
