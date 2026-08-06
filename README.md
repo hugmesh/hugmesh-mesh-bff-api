@@ -1,4 +1,4 @@
-# snapdragon-mesh-bff-api
+# hugmesh-mesh-bff-api
 
 The Meshtastic node-directory / caching BFF. It does **not** replace the
 optional `meshbridge` daemon (the Matrix<->mesh text bridge) or user-bff's
@@ -7,7 +7,7 @@ mesh-device registry — it sits *alongside* both:
 - **meshbridge** (generator `specs/cluster/manifests/meshbridge/`) owns the
   actual radio link and bridges chat text to/from Matrix. It *optionally*
   pushes a periodic node/room snapshot here.
-- **user-bff** (`systems.snapdragon.userbff.meshdevice`) owns *registration*:
+- **user-bff** (`systems.hugmesh.userbff.meshdevice`) owns *registration*:
   which platform user claims which node id, and that owner's
   status-sharing `visibility` choice.
 - **this service** owns a fast, cached, visibility-gated *read* surface over
@@ -65,7 +65,7 @@ silently no-op an INSERT for a genuinely new row.
 
 Every `GET /bff/mesh/**` read is served from an in-memory snapshot —
 **never** a per-request datastore query. The shape is cloned from
-`snapdragon-gateway`'s `cache.GatewayRouteAccessService`:
+`hugmesh-gateway`'s `cache.GatewayRouteAccessService`:
 
 - a `volatile` snapshot, seeded at `@PostConstruct`;
 - reloaded on a `@Scheduled(fixedDelayString=...)` tick from Postgres (the
@@ -82,10 +82,10 @@ Every `GET /bff/mesh/**` read is served from an in-memory snapshot —
   the default), `directory.NoopDirectoryMirror` wins via
   `@ConditionalOnMissingBean` — every write is a no-op and every read is
   empty, so the cache runs Postgres-only and degrades cleanly (cloned from
-  snapdragon-federation-api's `cache.NoopManifestCache` bean-selection
+  hugmesh-federation-api's `cache.NoopManifestCache` bean-selection
   inversion);
 - every reload is guarded by a `ReactiveCircuitBreaker`
-  (`config.CacheResilienceConfig`, cloned from snapdragon-gateway's
+  (`config.CacheResilienceConfig`, cloned from hugmesh-gateway's
   `config.GatewayResilienceConfig`) so a stalled datastore never blocks a
   reload tick indefinitely.
 
@@ -221,6 +221,16 @@ No live Postgres/Cassandra/Casdoor/user-bff is required for `test` — the
 store for full-context boots (`OpenApiSpecDumpTest`, `SecurityMatrixTest`);
 the repository slice (`MeshNodeDirectoryDaoTest`) provisions its own
 Testcontainers Postgres and runs the REAL Liquibase changelog over it.
+
+The `Makefile` also has local pen-test targets that mirror the centralized
+`.gitlab-ci.yml` `pentest:sca`/`pentest:dast` stage (both delegate to the
+generator's shared `/tests/pentest/` harness — see `Makefile` for details):
+
+```
+make pentest         # SCA (OWASP Dependency-Check) + DAST, non-fatal locally
+make pentest-sca     # just the OWASP Dependency-Check self-scan
+make pentest-dast    # authenticated ZAP + probes + nuclei, requires DAST_TARGET_URL
+```
 
 ## Layout
 

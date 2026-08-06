@@ -1,4 +1,4 @@
-# HugMesh mod BFF API — developer make targets.
+# HugMesh mesh BFF API — developer make targets.
 #
 # `make pentest` mirrors the centralized OWASP pen-test CI stage
 # (.gitlab-ci.yml -> generator /tests/pentest/ci/pentest-stage.gitlab-ci.yml)
