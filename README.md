@@ -192,7 +192,7 @@ clean — every node then reads as anonymous.
   `https://snapdragon-mesh-bff-api.snapdragon-backend.svc.cluster.local:8080`,
   declared before the `/bff/**` admin-bff catch-all
   (`specs/cluster/apps/20-gateway-fe.yaml` + the compose test fixture + the
-  `.hbs` template) and in `snapdragon-gateway`'s in-repo
+  `.hbs` template) and in `hugmesh-gateway`'s in-repo
   `cache.CanonicalSeed.fe()` fallback rows.
 - **route-access seed**: `ROLE_MESH` + `ROLE_ADMIN` rows for
   `snapdragon-fe-gateway` / `/bff/mesh/**` in
