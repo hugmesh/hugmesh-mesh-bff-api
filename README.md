@@ -256,7 +256,7 @@ R2DBC at a throwaway H2 store for the full-context boot tests
 and runs the real Liquibase changelog against it.
 
 **A note on the private parent/commons dependency:** this service depends
-on `systems.hugmesh:hugmesh-commons` (and its parent POM,
+on `net.hugmesh:hugmesh-commons` (and its parent POM,
 `hugmesh-parent`) for shared security, tenancy, and web building blocks.
 Those artifacts aren't published to Maven Central; CI resolves them from
 the org's GitLab Maven Package Registry using the committed

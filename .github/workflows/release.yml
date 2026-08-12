@@ -18,7 +18,7 @@ on:
 # mirror instead publishes to GHCR.
 #
 # The Dockerfile's build stage still needs to resolve the PRIVATE
-# systems.hugmesh:hugmesh-commons / hugmesh-parent artifacts (not on Maven
+# net.hugmesh:hugmesh-commons / hugmesh-parent artifacts (not on Maven
 # Central) via the committed settings.xml, which expects a GitLab
 # CI_JOB_TOKEN-shaped credential against the org's GitLab Maven Package
 # Registry (see settings.xml). That registry is a separate system from
