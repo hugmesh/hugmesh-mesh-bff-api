@@ -162,4 +162,4 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
-  packages-to-scan: systems.hugmesh.meshbff
+  packages-to-scan: net.hugmesh.meshbff
