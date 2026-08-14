@@ -1,10 +1,7 @@
 package net.hugmesh.meshbff.directory;
 
-import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
-
-import java.time.Instant;
 
 /**
  * Explicit {@code INSERT ... ON CONFLICT DO UPDATE} upserts for
@@ -19,65 +16,41 @@ import java.time.Instant;
  * heuristic entirely and is also the natural shape for a repeatedly-pushed
  * snapshot (the bridge re-sends every node/room it currently knows about on
  * every tick, not just deltas).
+ *
+ * <p>Data-access standard: this class is a thin FACADE over
+ * {@link MeshNodeDirectoryR2dbcRepository} / {@link MeshRoomDirectoryR2dbcRepository}
+ * — no raw {@code DatabaseClient} query strings. Each upsert is a Spring Data
+ * {@code @Query} method over a {@code static final String} SQL constant (derivation
+ * cannot express an {@code ON CONFLICT DO UPDATE} upsert), matching the
+ * {@code ModActionR2dbcRepository} idiom. The facade preserves the original
+ * {@code MeshNodeRow} / {@code MeshRoomRow} parameter shape so
+ * {@code sync.BridgeSyncService} is unchanged.
  */
 @Component
 public class MeshNodeDirectoryDao {
 
-    private final DatabaseClient db;
+    private final MeshNodeDirectoryR2dbcRepository nodeUpserts;
+    private final MeshRoomDirectoryR2dbcRepository roomUpserts;
 
-    public MeshNodeDirectoryDao(DatabaseClient db) {
-        this.db = db;
+    public MeshNodeDirectoryDao(MeshNodeDirectoryR2dbcRepository nodeUpserts,
+                                MeshRoomDirectoryR2dbcRepository roomUpserts) {
+        this.nodeUpserts = nodeUpserts;
+        this.roomUpserts = roomUpserts;
     }
 
     /** Upsert one node row (validated/clamped by the caller — see BridgeSyncService). */
     public Mono<Void> upsertNode(MeshNodeRow row) {
-        DatabaseClient.GenericExecuteSpec spec = db.sql("""
-                        INSERT INTO mesh_node_directory
-                            (node_id, long_name, short_name, last_seen_at, battery_pct, snr,
-                             hops_away, via_device, domain, updated_at)
-                        VALUES (:nodeId, :longName, :shortName, :lastSeenAt, :batteryPct, :snr,
-                                :hopsAway, :viaDevice, :domain, now())
-                        ON CONFLICT (node_id) DO UPDATE SET
-                            long_name = EXCLUDED.long_name,
-                            short_name = EXCLUDED.short_name,
-                            last_seen_at = COALESCE(EXCLUDED.last_seen_at, mesh_node_directory.last_seen_at),
-                            battery_pct = EXCLUDED.battery_pct,
-                            snr = EXCLUDED.snr,
-                            hops_away = EXCLUDED.hops_away,
-                            via_device = EXCLUDED.via_device,
-                            updated_at = now()
-                        """)
-                .bind("nodeId", row.nodeId());
-        spec = bindOrNull(spec, "longName", row.longName(), String.class);
-        spec = bindOrNull(spec, "shortName", row.shortName(), String.class);
-        spec = bindOrNull(spec, "lastSeenAt", row.lastSeenAt(), Instant.class);
-        spec = bindOrNull(spec, "batteryPct", row.batteryPct(), Integer.class);
-        spec = bindOrNull(spec, "snr", row.snr(), Float.class);
-        spec = bindOrNull(spec, "hopsAway", row.hopsAway(), Integer.class);
-        spec = bindOrNull(spec, "viaDevice", row.viaDevice(), String.class);
-        spec = spec.bind("domain", row.domain() == null || row.domain().isBlank() ? "default" : row.domain());
-        return spec.then();
+        return nodeUpserts.upsertNode(row.nodeId(), row.longName(), row.shortName(), row.lastSeenAt(),
+                row.batteryPct(), row.snr(), row.hopsAway(), row.viaDevice(), domainOrDefault(row.domain()));
     }
 
     /** Upsert one room row. */
     public Mono<Void> upsertRoom(MeshRoomRow row) {
-        DatabaseClient.GenericExecuteSpec spec = db.sql("""
-                        INSERT INTO mesh_room (room_id, device, mesh_channel, domain, updated_at)
-                        VALUES (:roomId, :device, :meshChannel, :domain, now())
-                        ON CONFLICT (room_id) DO UPDATE SET
-                            device = EXCLUDED.device,
-                            mesh_channel = EXCLUDED.mesh_channel,
-                            updated_at = now()
-                        """)
-                .bind("roomId", row.roomId());
-        spec = bindOrNull(spec, "device", row.device(), String.class);
-        spec = bindOrNull(spec, "meshChannel", row.meshChannel(), Integer.class);
-        spec = spec.bind("domain", row.domain() == null || row.domain().isBlank() ? "default" : row.domain());
-        return spec.then();
+        return roomUpserts.upsertRoom(row.roomId(), row.device(), row.meshChannel(),
+                domainOrDefault(row.domain()));
     }
 
-    private static DatabaseClient.GenericExecuteSpec bindOrNull(
-            DatabaseClient.GenericExecuteSpec spec, String name, Object value, Class<?> type) {
-        return value == null ? spec.bindNull(name, type) : spec.bind(name, value);
+    private static String domainOrDefault(String domain) {
+        return domain == null || domain.isBlank() ? "default" : domain;
     }
 }

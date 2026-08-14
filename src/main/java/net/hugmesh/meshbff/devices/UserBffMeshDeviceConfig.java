@@ -55,9 +55,9 @@ public class UserBffMeshDeviceConfig {
             @Value("${app.mesh.user-bff.base-url:"
                     + "https://hugmesh-user-bff-api.hugmesh-backend.svc.cluster.local:8080"
                     + "/bff/user/internal/mesh-devices}") String baseUrl,
-            @Value("${app.casdoor.systems.base-url:}") String casdoorBaseUrl,
-            @Value("${app.casdoor.systems.client-id:}") String clientId,
-            @Value("${app.casdoor.systems.client-secret:}") String clientSecret) {
+            @Value("${app.casdoor.platform.base-url:}") String casdoorBaseUrl,
+            @Value("${app.casdoor.platform.client-id:}") String clientId,
+            @Value("${app.casdoor.platform.client-secret:}") String clientSecret) {
 
         HttpClient httpClient = mtls.customize(HttpClient.create());
         WebClient userBff = WebClient.builder()

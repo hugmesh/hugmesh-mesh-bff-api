@@ -57,16 +57,16 @@ app:
 
   # Casdoor client-credentials client this BFF mints its OWN outbound ROLE_SERVICE
   # bearer from (to call user-bff's internal surface) — the SAME
-  # app.casdoor.systems.* namespace hugmesh-admin-bff-api's
+  # app.casdoor.platform.* namespace hugmesh-admin-bff-api's
   # UserBffNotificationConfig / hugmesh-actions' FederationUsernameClientConfig
   # use for the identical client_credentials mint, so one Casdoor application
   # (provisioned manually — see manifests/external-secrets/mesh-bff-externalsecrets.yaml
   # in the generator repo) can be reused/paralleled across services.
   casdoor:
-    systems:
-      base-url: "${APP_CASDOOR_SYSTEMS_BASE_URL:}"
-      client-id: "${APP_CASDOOR_SYSTEMS_CLIENT_ID:}"
-      client-secret: "${APP_CASDOOR_SYSTEMS_CLIENT_SECRET:}"
+    platform:
+      base-url: "${APP_CASDOOR_PLATFORM_BASE_URL:}"
+      client-id: "${APP_CASDOOR_PLATFORM_CLIENT_ID:}"
+      client-secret: "${APP_CASDOOR_PLATFORM_CLIENT_SECRET:}"
 
   # Best-effort Cassandra write-through mirror + fallback-read for the node/room
   # directory (directory.CassandraDirectoryMirror / directory.NoopDirectoryMirror).
