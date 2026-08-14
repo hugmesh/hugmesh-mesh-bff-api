@@ -53,7 +53,7 @@ public class UserBffMeshDeviceConfig {
             UserBffHttpClientSsl mtls,
             @Value("${app.mesh.user-bff.enabled:false}") boolean enabled,
             @Value("${app.mesh.user-bff.base-url:"
-                    + "https://snapdragon-user-bff-api.snapdragon-backend.svc.cluster.local:8080"
+                    + "https://hugmesh-user-bff-api.hugmesh-backend.svc.cluster.local:8080"
                     + "/bff/user/internal/mesh-devices}") String baseUrl,
             @Value("${app.casdoor.systems.base-url:}") String casdoorBaseUrl,
             @Value("${app.casdoor.systems.client-id:}") String clientId,

@@ -132,13 +132,13 @@ class MeshNodeDirectoryDaoTest extends PostgresTestSupport {
 
     @Test
     void upsertRoom_thenFindAll_roundTrips() {
-        MeshRoomRow row = new MeshRoomRow("!room:hugmesh.systems", "wifi0", 3, "default", null);
+        MeshRoomRow row = new MeshRoomRow("!room:hugmesh.net", "wifi0", 3, "default", null);
 
         StepVerifier.create(dao.upsertRoom(row)).verifyComplete();
 
         StepVerifier.create(roomRepository.findAll())
                 .assertNext(found -> {
-                    assertThat(found.roomId()).isEqualTo("!room:hugmesh.systems");
+                    assertThat(found.roomId()).isEqualTo("!room:hugmesh.net");
                     assertThat(found.device()).isEqualTo("wifi0");
                     assertThat(found.meshChannel()).isEqualTo(3);
                 })

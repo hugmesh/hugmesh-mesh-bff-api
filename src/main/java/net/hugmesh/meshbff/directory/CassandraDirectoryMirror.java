@@ -51,7 +51,7 @@ public class CassandraDirectoryMirror implements DirectoryMirror {
     private volatile CqlSession session;
 
     public CassandraDirectoryMirror(
-            @Value("${app.mirror.cassandra.contact-point:cassandra.snapdragon-pki.svc.cluster.local:9042}") String contactPoint,
+            @Value("${app.mirror.cassandra.contact-point:cassandra.hugmesh-pki.svc.cluster.local:9042}") String contactPoint,
             @Value("${app.mirror.cassandra.local-dc:dc1}") String localDc,
             @Value("${app.mirror.cassandra.keyspace:snapdragon_mesh}") String keyspace,
             CassandraSessionFactory sessionFactory) {

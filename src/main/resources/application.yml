@@ -5,20 +5,20 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # The Casdoor issuer (id.snapdragon.systems) the fe-gateway mints JWTs
+          # The Casdoor issuer (id.hugmesh.net) the fe-gateway mints JWTs
           # against; the resource-server validates the forwarded bearer here too.
-          issuer-uri: "${CASDOOR_ISSUER_URI:https://id.snapdragon.systems}"
+          issuer-uri: "${CASDOOR_ISSUER_URI:https://id.hugmesh.net}"
           # Explicit JWKS so the resource server does NOT do OIDC discovery against
           # issuer-uri (unreachable in-container when issuer-uri is the browser-facing
           # host). Mirrors every other HugMesh BFF.
-          jwk-set-uri: "${CASDOOR_JWKS_URI:${CASDOOR_ISSUER_URI:https://id.snapdragon.systems}/.well-known/jwks}"
+          jwk-set-uri: "${CASDOOR_JWKS_URI:${CASDOOR_ISSUER_URI:https://id.hugmesh.net}/.well-known/jwks}"
 
   # Runtime data access is REACTIVE (R2DBC) over this BFF's OWN datastore — it owns
   # exactly two tables, mesh_node_directory + mesh_room. It never touches any other
   # service's database (user-bff's mesh_device table is read ONLY over HTTP, via
   # devices.UserBffMeshDeviceClient).
   r2dbc:
-    url: "${SPRING_R2DBC_URL:r2dbc:postgresql://mesh-bff-db.snapdragon-backend.svc.cluster.local:5432/meshbff}"
+    url: "${SPRING_R2DBC_URL:r2dbc:postgresql://mesh-bff-db.hugmesh-backend.svc.cluster.local:5432/meshbff}"
     username: "${SPRING_R2DBC_USERNAME:meshbff}"
     password: "${SPRING_R2DBC_PASSWORD:}"
 
@@ -27,7 +27,7 @@ spring:
   liquibase:
     enabled: true
     change-log: "classpath:db/changelog/db.changelog-master.xml"
-    url: "${SPRING_LIQUIBASE_URL:jdbc:postgresql://mesh-bff-db.snapdragon-backend.svc.cluster.local:5432/meshbff}"
+    url: "${SPRING_LIQUIBASE_URL:jdbc:postgresql://mesh-bff-db.hugmesh-backend.svc.cluster.local:5432/meshbff}"
     user: "${SPRING_LIQUIBASE_USER:meshbff}"
     password: "${SPRING_LIQUIBASE_PASSWORD:}"
 
@@ -53,7 +53,7 @@ app:
     # once the mTLS store + Casdoor SERVICE client credentials are provisioned.
     user-bff:
       enabled: "${APP_MESH_USER_BFF_ENABLED:false}"
-      base-url: "${APP_MESH_USER_BFF_BASE_URL:https://snapdragon-user-bff-api.snapdragon-backend.svc.cluster.local:8080/bff/user/internal/mesh-devices}"
+      base-url: "${APP_MESH_USER_BFF_BASE_URL:https://hugmesh-user-bff-api.hugmesh-backend.svc.cluster.local:8080/bff/user/internal/mesh-devices}"
 
   # Casdoor client-credentials client this BFF mints its OWN outbound ROLE_SERVICE
   # bearer from (to call user-bff's internal surface) — the SAME
@@ -78,7 +78,7 @@ app:
   mirror:
     cassandra:
       enabled: "${APP_MIRROR_CASSANDRA_ENABLED:false}"
-      contact-point: "${CASSANDRA_CONTACT_POINT:cassandra.snapdragon-pki.svc.cluster.local:9042}"
+      contact-point: "${CASSANDRA_CONTACT_POINT:cassandra.hugmesh-pki.svc.cluster.local:9042}"
       local-dc: "${CASSANDRA_LOCAL_DC:dc1}"
       keyspace: "${CASSANDRA_KEYSPACE:snapdragon_mesh}"
       auth:

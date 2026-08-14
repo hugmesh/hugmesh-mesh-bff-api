@@ -7,7 +7,7 @@ mesh-device registry — it sits *alongside* both:
 - **meshbridge** (generator `specs/cluster/manifests/meshbridge/`) owns the
   actual radio link and bridges chat text to/from Matrix. It *optionally*
   pushes a periodic node/room snapshot here.
-- **user-bff** (`systems.hugmesh.userbff.meshdevice`) owns *registration*:
+- **user-bff** (`net.hugmesh.userbff.meshdevice`) owns *registration*:
   which platform user claims which node id, and that owner's
   status-sharing `visibility` choice.
 - **this service** owns a fast, cached, visibility-gated *read* surface over
@@ -16,8 +16,8 @@ mesh-device registry — it sits *alongside* both:
 
 ## Where it sits
 
-ClusterIP-only in `snapdragon-backend`. Reachable only via the fe-gateway's
-`/bff/mesh/**` route (same-origin with `snapdragon.systems`), which enforces
+ClusterIP-only in `hugmesh-backend`. Reachable only via the fe-gateway's
+`/bff/mesh/**` route (same-origin with `hugmesh.net`), which enforces
 the Casdoor role rules (`ROLE_MESH` + `ROLE_ADMIN` superset) from the
 route-access DB first — this service's own `SecurityConfig` re-checks the
 same gate as defence-in-depth.
@@ -140,7 +140,7 @@ producer's payload **exactly**:
   "nodes": [{"nodeId": "!a1b2c3d4", "longName": "...", "shortName": "...",
              "lastSeenAt": "...", "batteryPct": 87, "snr": 4.5,
              "hopsAway": 2, "viaDevice": "wifi0"}],
-  "rooms": [{"roomId": "!room:snapdragon.systems", "device": "wifi0", "meshChannel": 3}]
+  "rooms": [{"roomId": "!room:hugmesh.net", "device": "wifi0", "meshChannel": 3}]
 }
 ```
 
@@ -161,12 +161,12 @@ never fails the whole request for one bad row:
 server-to-server GET against user-bff's REAL internal contract:
 
 ```
-GET https://snapdragon-user-bff-api.snapdragon-backend.svc.cluster.local:8080/bff/user/internal/mesh-devices
+GET https://hugmesh-user-bff-api.hugmesh-backend.svc.cluster.local:8080/bff/user/internal/mesh-devices
   -> 200 [{"nodeId", "localpart", "displayName", "visibility"}, ...]
 ```
 
 (verified against `InternalMeshDeviceController.BridgeMapping` in
-snapdragon-user-bff-api's main, and independently against the identical
+hugmesh-user-bff-api's main, and independently against the identical
 shape meshbridge's own `matrix_cs.UserBffClient.fetch_mappings()` parses).
 Auth is the platform's established ROLE_SERVICE pattern: an mTLS client
 identity (`devices.UserBffHttpClientSsl`, cloned from mod-bff-api's
@@ -189,13 +189,13 @@ clean — every node then reads as anonymous.
 - **MCS categories**: `s0:c80` (mesh-bff-api), `s0:c81` (mesh-bff-db) — next
   free after `attestation-server`'s `s0:c79` (see `docs/SECURITY.md`).
 - **Gateway route**: fe-gateway `/bff/mesh/**` ->
-  `https://snapdragon-mesh-bff-api.snapdragon-backend.svc.cluster.local:8080`,
+  `https://hugmesh-mesh-bff-api.hugmesh-backend.svc.cluster.local:8080`,
   declared before the `/bff/**` admin-bff catch-all
   (`specs/cluster/apps/20-gateway-fe.yaml` + the compose test fixture + the
-  `.hbs` template) and in `snapdragon-gateway`'s in-repo
+  `.hbs` template) and in `hugmesh-gateway`'s in-repo
   `cache.CanonicalSeed.fe()` fallback rows.
 - **route-access seed**: `ROLE_MESH` + `ROLE_ADMIN` rows for
-  `snapdragon-fe-gateway` / `/bff/mesh/**` in
+  `hugmesh-fe-gateway` / `/bff/mesh/**` in
   `specs/cluster/manifests/route-access/initdb/20-schema.sql`.
 - **Casdoor**: `ROLE_MESH` role in
   `specs/cluster/manifests/casdoor/init-data-configmap.yaml`; the
