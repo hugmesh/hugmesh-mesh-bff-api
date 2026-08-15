@@ -29,9 +29,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * newline), and writes it to a committed path
  * ({@code src/main/resources/openapi/openapi.json}).
  *
- * <p>{@code -Dopenapi.spec.check=true} flips this from "write" to "assert the
- * committed file already matches" (a CI drift gate); default is
- * write-and-pass.
+ * <p><b>Drift guard (DEFAULT, not optional):</b> with no flag this test ASSERTS that the
+ * committed file already matches the live API, and fails naming the refresh command if it
+ * does not. To refresh, pass {@code -Dopenapi.spec.write=true} and commit the result.
+ *
+ * <p><b>Why the default is "assert", learned the hard way:</b> it used to be the reverse —
+ * write-and-pass by default, assert behind an opt-in {@code -Dopenapi.spec.check=true} meant
+ * for "a CI verify lane". Nothing ever wired it: the flag's only occurrence in this repo was
+ * the line that read it. So every {@code ./mvnw test} rewrote this committed contract and went
+ * green, and drift was visible only to someone who happened to notice a dirty working tree.
+ * A guard that must be opted into is a guard that does not run.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
@@ -75,15 +82,21 @@ class OpenApiSpecDumpTest {
                 .as("the mesh BFF surface must be present in the dumped spec")
                 .anyMatch(p -> p.startsWith("/bff/mesh"));
 
-        boolean checkOnly = Boolean.getBoolean("openapi.spec.check");
-        if (checkOnly) {
+        // ASSERT BY DEFAULT; write only when explicitly asked. The inverse — write-and-pass by
+        // default, assert behind an opt-in flag — is what let this contract rot: every
+        // `./mvnw test` rewrote the file and went green, so drift was only ever visible to
+        // someone who happened to notice a dirty working tree. Refreshing is now a deliberate act.
+        if (!Boolean.getBoolean("openapi.spec.write")) {
             assertThat(Files.exists(SPEC_PATH))
-                    .as("committed spec %s must exist when -Dopenapi.spec.check=true", SPEC_PATH)
+                    .as("committed spec %s is MISSING — regenerate with "
+                            + "`./mvnw -Dtest=OpenApiSpecDumpTest -Dopenapi.spec.write=true test`", SPEC_PATH)
                     .isTrue();
             String committed = Files.readString(SPEC_PATH, StandardCharsets.UTF_8);
             assertThat(committed)
-                    .as("committed %s is STALE — re-run `./mvnw -Dtest=OpenApiSpecDumpTest test` "
-                            + "(without -Dopenapi.spec.check) and commit the refreshed spec", SPEC_PATH)
+                    .as("committed %s is STALE — the API changed but the contract the ng-openapi-gen "
+                            + "typed clients and the docs pipeline consume did not. Regenerate with "
+                            + "`./mvnw -Dtest=OpenApiSpecDumpTest -Dopenapi.spec.write=true test` "
+                            + "and COMMIT the refreshed spec", SPEC_PATH)
                     .isEqualTo(stable);
             return;
         }

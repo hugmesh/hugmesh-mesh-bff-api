@@ -1,12 +1,12 @@
 {
   "openapi" : "3.0.1",
   "info" : {
-    "title" : "OpenAPI definition",
-    "version" : "v0"
+    "title" : "hugmesh-mesh-bff-api",
+    "description" : "Mesh BFF API (/bff/mesh/**) — the browser-facing seam for the mesh directory, device inventory and bridge sync.",
+    "version" : "0.1.0"
   },
   "servers" : [ {
-    "url" : "http://localhost:37669",
-    "description" : "Generated server url"
+    "url" : ""
   } ],
   "tags" : [ {
     "name" : "Mesh directory",
