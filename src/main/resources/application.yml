@@ -80,7 +80,7 @@ app:
       enabled: "${APP_MIRROR_CASSANDRA_ENABLED:false}"
       contact-point: "${CASSANDRA_CONTACT_POINT:cassandra.hugmesh-pki.svc.cluster.local:9042}"
       local-dc: "${CASSANDRA_LOCAL_DC:dc1}"
-      keyspace: "${CASSANDRA_KEYSPACE:snapdragon_mesh}"
+      keyspace: "${CASSANDRA_KEYSPACE:hugmesh_mesh}"
       auth:
         enabled: "${CASSANDRA_AUTH_ENABLED:false}"
         username: "${CASSANDRA_USERNAME:}"
