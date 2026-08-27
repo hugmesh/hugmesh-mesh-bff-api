@@ -63,5 +63,5 @@ jobs:
             CI_API_V4_URL=${{ vars.CI_API_V4_URL }}
             GITLAB_GROUP_ID=${{ vars.GITLAB_GROUP_ID }}
           tags: |
-            ghcr.io/hugmesh-net/hugmesh-mesh-bff-api:${{ steps.vars.outputs.tag }}
-            ghcr.io/hugmesh-net/hugmesh-mesh-bff-api:latest
+            ghcr.io/hugmesh/hugmesh-mesh-bff-api:${{ steps.vars.outputs.tag }}
+            ghcr.io/hugmesh/hugmesh-mesh-bff-api:latest
