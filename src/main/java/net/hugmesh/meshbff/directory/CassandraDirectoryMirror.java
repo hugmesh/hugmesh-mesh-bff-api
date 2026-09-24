@@ -106,19 +106,24 @@ public class CassandraDirectoryMirror implements DirectoryMirror {
 
     @Override
     public Flux<MeshNodeRow> loadNodes() {
-        return runRead(() -> {
-            List<MeshNodeRow> out = new ArrayList<>();
-            for (Row r : session().execute(SimpleStatement.builder(
-                    "SELECT node_id, long_name, short_name, last_seen_at, battery_pct, snr, "
-                            + "hops_away, via_device, domain FROM mesh_node_directory").build())) {
-                out.add(new MeshNodeRow(
-                        r.getString("node_id"), r.getString("long_name"), r.getString("short_name"),
-                        r.getInstant("last_seen_at"), r.getInt("battery_pct"),
-                        r.getFloat("snr"), r.getInt("hops_away"), r.getString("via_device"),
-                        r.getString("domain"), null));
-            }
-            return out;
-        }, "loadNodes");
+        // A method reference, not an inline lambda: the body is over the parent ruleset's
+        // LambdaBodyLength limit. It still runs lazily inside runRead's boundedElastic
+        // supplier, so session() is never touched on the caller's thread.
+        return runRead(this::selectNodes, "loadNodes");
+    }
+
+    private List<MeshNodeRow> selectNodes() {
+        List<MeshNodeRow> out = new ArrayList<>();
+        for (Row r : session().execute(SimpleStatement.builder(
+                "SELECT node_id, long_name, short_name, last_seen_at, battery_pct, snr, "
+                        + "hops_away, via_device, domain FROM mesh_node_directory").build())) {
+            out.add(new MeshNodeRow(
+                    r.getString("node_id"), r.getString("long_name"), r.getString("short_name"),
+                    r.getInstant("last_seen_at"), r.getInt("battery_pct"),
+                    r.getFloat("snr"), r.getInt("hops_away"), r.getString("via_device"),
+                    r.getString("domain"), null));
+        }
+        return out;
     }
 
     @Override

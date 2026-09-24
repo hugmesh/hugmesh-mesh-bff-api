@@ -17,6 +17,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * <p>{@code @EnableScheduling} activates the {@code @Scheduled} cache-refresh
  * ticks in {@code directory.MeshDirectoryCache} and {@code devices.MyDevicesCache}.
  */
+@SuppressWarnings("checkstyle:HideUtilityClassConstructor")
 @SpringBootApplication
 @EnableScheduling
 public class MeshBffApplication {
