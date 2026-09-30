@@ -1,6 +1,8 @@
 package net.hugmesh.meshbff.sync;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -14,6 +16,24 @@ import java.util.List;
  *  "rooms": [{"roomId","device","meshChannel"}, ...]}</pre>
  */
 public record BridgeSyncRequest(List<BridgeNode> nodes, List<BridgeRoom> rooms) {
+
+    /** Defensive, unmodifiable copy on the way in; null stays null (the service treats it as empty). */
+    public BridgeSyncRequest {
+        nodes = nodes == null ? null : Collections.unmodifiableList(new ArrayList<>(nodes));
+        rooms = rooms == null ? null : Collections.unmodifiableList(new ArrayList<>(rooms));
+    }
+
+    /** Unmodifiable view; the record never hands out its backing list. */
+    @Override
+    public List<BridgeNode> nodes() {
+        return nodes == null ? null : Collections.unmodifiableList(nodes);
+    }
+
+    /** Unmodifiable view; the record never hands out its backing list. */
+    @Override
+    public List<BridgeRoom> rooms() {
+        return rooms == null ? null : Collections.unmodifiableList(rooms);
+    }
 
     /** One node's telemetry snapshot, in the bridge's OWN field-name/casing. */
     public record BridgeNode(
