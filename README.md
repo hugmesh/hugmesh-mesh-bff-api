@@ -16,17 +16,22 @@ mesh-device registry — it sits *alongside* both:
 
 ## Where it sits
 
-ClusterIP-only in `hugmesh-backend`. Reachable only via the fe-gateway's
-`/bff/mesh/**` route (same-origin with `hugmesh.net`), which enforces
-the Casdoor role rules (`ROLE_MESH` + `ROLE_ADMIN` superset) from the
-route-access DB first — this service's own `SecurityConfig` re-checks the
-same gate as defence-in-depth.
+ClusterIP-only in `hugmesh-backend`. Browsers reach it only via the fe-gateway's
+`/bff/mesh/**` route (same-origin with `hugmesh.net`). The gateway checks the
+route-access DB first: one allow row, `ROLE_MESH`. Admins pass because the
+gateway lets admins through; the DB has no `ROLE_ADMIN` row for this route.
+A second row denies `ROLE_USER` on `/bff/mesh/internal/**`. meshbridge calls
+that ingest in-cluster, not through the gateway. This service's own
+`SecurityConfig` re-checks the gate (`MESH`, `ADMIN` or `SUPERADMIN`) as
+defence-in-depth.
 
 ## Casdoor role model
 
-- `ROLE_MESH` — the ordinary floor. Grantable/revocable by an admin via
-  admin-bff's `POST/DELETE /bff/admin/roles/{roleName}/{user}` (once wired —
-  see the platform-wiring section of the task this repo shipped with).
+- `ROLE_MESH` — the ordinary floor. An admin can suspend it with admin-bff's
+  `POST /bff/admin/access-roles/{role}/{user}` and restore it with `DELETE` on
+  the same path. admin-bff's direct grant endpoint,
+  `POST/DELETE /bff/admin/roles/{roleName}/{user}`, does **not** accept
+  `ROLE_MESH`. UNVERIFIED: how a user is first granted the role.
 - `ROLE_ADMIN` / `ROLE_SUPERADMIN` — chain-level supersets on `/bff/mesh/**`
   (paired explicitly, mirroring `/bff/mod/**`'s convention — the role
   hierarchy has **no** `ADMIN > MESH` edge).
@@ -55,9 +60,10 @@ same gate as defence-in-depth.
   `mesh_channel`, `domain`, `updated_at`.
 
 Both tables are owned exclusively by this service (Liquibase,
-`db/changelog/`). Writes are **app-assigned-PK upserts** via
-`directory.MeshNodeDirectoryDao`'s explicit `INSERT ... ON CONFLICT DO UPDATE`
-SQL — deliberately **not** `ReactiveCrudRepository.save()`, whose default
+`db/changelog/`). Writes are **app-assigned-PK upserts** through
+`directory.MeshNodeDirectoryDao`, a facade over `@Query` methods with explicit
+`INSERT ... ON CONFLICT DO UPDATE` SQL in `directory.MeshNodeDirectoryR2dbcRepository`
+and `directory.MeshRoomDirectoryR2dbcRepository` — deliberately **not** `ReactiveCrudRepository.save()`, whose default
 `isNew()` heuristic treats a non-null assigned id as "existing" and would
 silently no-op an INSERT for a genuinely new row.
 
@@ -71,7 +77,9 @@ Every `GET /bff/mesh/**` read is served from an in-memory snapshot —
 - reloaded on a `@Scheduled(fixedDelayString=...)` tick from Postgres (the
   source of truth) — `app.mesh.cache.refresh-interval-ms` (default 5000ms)
   for the node/room directory, `app.mesh.devices-cache.refresh-interval-ms`
-  (default 60000ms) for the user-bff registration mapping;
+  (default 60000ms) for the user-bff registration mapping. A node counts as
+  online when `lastSeenAt` is within `app.mesh.node-online-window-seconds`
+  (default 300);
 - every successful Postgres reload is best-effort mirrored to Cassandra
   (`directory.CassandraDirectoryMirror`, cloned from admin-bff-api's
   `routeaccess.CassandraRouteMirror` + `cassandra.CassandraSessionFactory`
@@ -83,7 +91,8 @@ Every `GET /bff/mesh/**` read is served from an in-memory snapshot —
   `@ConditionalOnMissingBean` — every write is a no-op and every read is
   empty, so the cache runs Postgres-only and degrades cleanly (cloned from
   hugmesh-federation-api's `cache.NoopManifestCache` bean-selection
-  inversion);
+  inversion). The cluster manifest does not set the flag, so the cluster runs
+  Postgres-only;
 - every reload is guarded by a `ReactiveCircuitBreaker`
   (`config.CacheResilienceConfig`, cloned from hugmesh-gateway's
   `config.GatewayResilienceConfig`) so a stalled datastore never blocks a
@@ -122,6 +131,14 @@ registrations known yet" state, not an error).
   SUPERADMIN an unconditional bypass), called out explicitly rather than
   folded silently into the "four rules".
 
+In code, `Visibility.permits` never looks at the caller's role. It gets the
+owner flag, the same-domain flag and the superadmin flag only. So "same domain"
+for `channels` means any caller who passed the route gate, including a plain
+`ROLE_ADMIN`. A row whose `domain` is blank or `default` counts as the same
+domain for everyone, and `BridgeSyncService` writes `default` on every node and
+room it ingests. Today that makes `/bff/mesh/rooms` unfiltered and makes
+`channels` nodes visible to every caller.
+
 `GET /bff/mesh/devices/mine` is **not** visibility-gated — a caller always
 sees their own devices in full, regardless of their own `visibility` setting
 (that setting only governs what *other* callers see).
@@ -131,7 +148,8 @@ sees their own devices in full, regardless of their own `visibility` setting
 `POST /bff/mesh/internal/bridge-sync` (ROLE_SERVICE only) is the meshbridge
 daemon's `MeshBffSync.push_snapshot` push
 (`specs/cluster/manifests/meshbridge/app/main.py`, gated on
-`MESHBRIDGE_MESHBFF_SYNC_URL` being set — mesh-bff-api is its own optional
+`MESHBRIDGE_MESHBFF_SYNC_URL` being set, every `MESHBRIDGE_SYNC_PUSH_SECONDS`,
+default 60 — mesh-bff-api is its own optional
 service, so meshbridge runs fine without it). Field names match that
 producer's payload **exactly**:
 
@@ -153,6 +171,7 @@ never fails the whole request for one bad row:
   error).
 - `batteryPct` is clamped to `0..101`.
 - A blank `roomId` is skipped.
+- Every accepted node and room is stored with `domain` = `default`.
 
 ## The user-bff internal client
 
@@ -177,46 +196,57 @@ canonical "call another BFF's ROLE_SERVICE internal surface" shape), mirroring
 the exact posture meshbridge's own `CasdoorTokenSource`/`UserBffClient`
 present to this same endpoint. GATED, default OFF
 (`app.mesh.user-bff.enabled=false`) so a user-bff-less dev/test/CI run boots
-clean — every node then reads as anonymous.
+clean — every node then reads as anonymous. The cluster manifest turns the leg
+on (`APP_MESH_USER_BFF_ENABLED=true`) but leaves the outbound mTLS gate
+(`hugmesh.mtls.client.enabled`, env `HUGMESH_MTLS_CLIENT_ENABLED`) at its
+default, off.
 
 ## Host wiring (cluster)
 
-- **Deployment/Service**: `specs/cluster/manifests/mesh-bff-api/` (cloned
+Paths are in `hugmesh-generator`, under `specs/cluster/` unless noted.
+
+- **Deployment/Service**: `manifests/mesh-bff-api/` (cloned
   from `manifests/mod-bff-api/`) + a dedicated Postgres,
-  `specs/cluster/manifests/mesh-bff-db/` (cloned from `manifests/mod-bff-db/`).
-- **ArgoCD apps**: `specs/cluster/apps/39a-mesh-bff-db.yaml` (sync-wave 1) +
-  `39b-mesh-bff-api.yaml` (sync-wave 0), + the `templates/apps/*.hbs` twins.
-- **MCS categories**: `s0:c80` (mesh-bff-api), `s0:c81` (mesh-bff-db) — next
-  free after `attestation-server`'s `s0:c79` (see `docs/SECURITY.md`).
+  `manifests/mesh-bff-db/` (cloned from `manifests/mod-bff-db/`).
+- **ArgoCD apps**: `apps/34c-mesh-bff-db.yaml` (sync-wave 2) +
+  `apps/34d-mesh-bff-api.yaml` (sync-wave 3). No `templates/apps/*.hbs` twin exists.
+- **MCS categories**: `s0:c80` (mesh-bff-api), `s0:c81` (mesh-bff-db), the two
+  that follow `attestation-server`'s `s0:c79` (see `docs/SECURITY.md`).
 - **Gateway route**: fe-gateway `/bff/mesh/**` ->
   `https://hugmesh-mesh-bff-api.hugmesh-backend.svc.cluster.local:8080`,
-  declared before the `/bff/**` admin-bff catch-all
-  (`specs/cluster/apps/20-gateway-fe.yaml` + the compose test fixture + the
-  `.hbs` template) and in `hugmesh-gateway`'s in-repo
-  `cache.CanonicalSeed.fe()` fallback rows.
-- **route-access seed**: `ROLE_MESH` + `ROLE_ADMIN` rows for
-  `hugmesh-fe-gateway` / `/bff/mesh/**` in
-  `specs/cluster/manifests/route-access/initdb/20-schema.sql`.
-- **Casdoor**: `ROLE_MESH` role in
-  `specs/cluster/manifests/casdoor/init-data-configmap.yaml`; the
-  `app-mesh-bff` client-credentials client is **manually provisioned**
-  (same posture as meshbridge's own `app-meshbridge` client — see
-  `specs/cluster/manifests/external-secrets/mesh-bff-externalsecrets.yaml`'s
-  header for the exact steps).
-- **ESO**: `specs/cluster/manifests/external-secrets/mesh-bff-externalsecrets.yaml`
-  — DB owner + least-privilege app creds, the server mTLS cert, the outbound
-  client mTLS cert, and the `app-mesh-bff` Casdoor client id/secret, all in
-  one file (mirrors the `meshbridge-externalsecrets.yaml` optional-service
-  shape).
+  declared before the `/bff/**` admin-bff catch-all in `apps/20-gateway-fe.yaml`.
+  No template or compose fixture carries it.
+- **route-access seed**: in `manifests/route-access/initdb/20-schema.sql`, an
+  allow row `ROLE_MESH` on `/bff/mesh/**` for `hugmesh-fe-gateway`, and a deny
+  row `ROLE_USER` on `/bff/mesh/internal/**`. `hugmesh-gateway`'s fallback seed
+  (`cache.CanonicalSeed.fe()`) and its `compose/route-access-seed.sql` carry only
+  the deny row.
+- **Casdoor**: `ROLE_MESH` role in `manifests/casdoor/init-data-configmap.yaml`.
+  The client-credentials application that mints the SERVICE bearer is
+  **manually provisioned**, as meshbridge's `app-meshbridge` is. Its id and
+  secret go to Vault path `hugmesh/mesh-bff-casdoor-client`.
+- **ESO**: in `manifests/external-secrets/secretstore.yaml`: `mesh-bff-db-auth`
+  (DB owner), `mesh-bff-db-app-auth` (least-privilege app role) and
+  `mesh-bff-casdoor-client`. In `manifests/external-secrets/pki-externalsecrets.yaml`:
+  the mTLS certificates `hugmesh-mesh-bff-api-mtls` and `mesh-bff-db-mtls`.
+  There is no separate outbound-client certificate; the outbound client reads
+  the same `/stores` keystore. (A file named `mesh-bff-externalsecrets.yaml`
+  does not exist, though comments in `application.yml` and the generator's
+  `deployment.yaml` still name it.)
 
 ## Build & test
 
 ```
 ./mvnw -s settings.xml test      # unit + @DataR2dbcTest (Testcontainers Postgres) + full-context slices
-./mvnw -s settings.xml verify    # what CI runs
+./mvnw -s settings.xml verify    # what the GitLab CI test job runs (./mvnw verify -B -s settings.xml)
 ```
 
-No live Postgres/Cassandra/Casdoor/user-bff is required for `test` — the
+`.github/workflows/release.yml` is a manual image build and runs no tests.
+
+No live Postgres/Cassandra/Casdoor/user-bff is required for `test`, but
+`MeshNodeDirectoryDaoTest` starts a Testcontainers Postgres, so Docker must run. The
+`net.hugmesh` libraries come from `~/.m2` or, failing that, the GitLab registry
+named in `settings.xml`. The
 `test` Spring profile disables Liquibase + points R2DBC at a throwaway H2
 store for full-context boots (`OpenApiSpecDumpTest`, `SecurityMatrixTest`);
 the repository slice (`MeshNodeDirectoryDaoTest`) provisions its own
@@ -227,15 +257,15 @@ The `Makefile` also has local pen-test targets that mirror the centralized
 generator's shared `/tests/pentest/` harness — see `Makefile` for details):
 
 ```
-make pentest         # SCA (OWASP Dependency-Check) + DAST, non-fatal locally
-make pentest-sca     # just the OWASP Dependency-Check self-scan
+make pentest         # SCA (OWASP Dependency-Check) + DAST; missing tooling or target is skipped, not fatal
+make pentest-sca     # just the OWASP Dependency-Check self-scan (fails on CVSS >= 9)
 make pentest-dast    # authenticated ZAP + probes + nuclei, requires DAST_TARGET_URL
 ```
 
 ## Layout
 
 ```
-config/     SecurityConfig, CommonsSecurityConfig, CacheResilienceConfig
+config/     SecurityConfig, CommonsSecurityConfig, CacheResilienceConfig, OpenApiConfig
 security/   Roles (Authentication-typed domain-scoping helpers)
 web/        ApiExceptionHandler, ValidationExceptionHandler
 cassandra/  CassandraSessionFactory (best-effort mirror session builder)
@@ -251,6 +281,7 @@ devices/    the user-bff internal client + registration cache + the
 - `channels` visibility is domain-scoped, not room-membership-scoped (no
   room-membership source exists here yet).
 - `friends` visibility has no backing primitive and is treated as `private`.
-- The `app-mesh-bff` Casdoor client is manually provisioned (no automated
-  seed job), matching every other ROLE_SERVICE machine-client on the
-  platform (`app-meshbridge`, `app-signup-gate`, ...).
+- The mesh-bff Casdoor client is manually provisioned (no automated seed job),
+  like meshbridge's `app-meshbridge`. The signup gate's `app-signup-gate` is
+  seeded by the `casdoor-init` job, so this is not true of every ROLE_SERVICE
+  client.
