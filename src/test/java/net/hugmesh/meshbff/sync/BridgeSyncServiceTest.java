@@ -7,6 +7,7 @@ import reactor.test.StepVerifier;
 import net.hugmesh.meshbff.directory.MeshNodeDirectoryDao;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -93,6 +94,35 @@ class BridgeSyncServiceTest {
                     assertThat(result.roomsUpserted()).isEqualTo(1);
                 })
                 .verifyComplete();
+    }
+
+    /** A {@code null} row is the most malformed row there is: it must be skipped like any
+     *  other unusable row, and the usable rows beside it must still be written. Without the
+     *  null filter in {@link BridgeSyncRequest} this is a whole-request failure, either a
+     *  NullPointerException while the record is built or one from {@code Flux.fromIterable}. */
+    @Test
+    void apply_nullRowsAreSkipped_theRestOfTheSnapshotIsApplied() {
+        MeshNodeDirectoryDao dao = Mockito.mock(MeshNodeDirectoryDao.class);
+        Mockito.when(dao.upsertNode(any())).thenReturn(Mono.empty());
+        Mockito.when(dao.upsertRoom(any())).thenReturn(Mono.empty());
+        BridgeSyncService service = new BridgeSyncService(dao);
+
+        BridgeSyncRequest request = new BridgeSyncRequest(
+                Arrays.asList(
+                        null,
+                        new BridgeSyncRequest.BridgeNode("!a1b2c3d4", "Good", "G", Instant.now(), 80, 3.0f, 1, "wifi0")),
+                Arrays.asList(
+                        new BridgeSyncRequest.BridgeRoom("!room1:x", "wifi0", 1),
+                        null));
+
+        StepVerifier.create(service.apply(request))
+                .assertNext(result -> {
+                    assertThat(result.nodesUpserted()).isEqualTo(1);
+                    assertThat(result.roomsUpserted()).isEqualTo(1);
+                })
+                .verifyComplete();
+        Mockito.verify(dao, Mockito.times(1)).upsertNode(any());
+        Mockito.verify(dao, Mockito.times(1)).upsertRoom(any());
     }
 
     @Test
