@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The meshbridge daemon's {@code POST /bff/mesh/internal/bridge-sync} push
@@ -17,10 +18,25 @@ import java.util.List;
  */
 public record BridgeSyncRequest(List<BridgeNode> nodes, List<BridgeRoom> rooms) {
 
-    /** Defensive, unmodifiable copy on the way in; null stays null (the service treats it as empty). */
+    /**
+     * Defensive, unmodifiable copy on the way in. A null LIST stays null (the
+     * service treats it as empty). A null ROW is dropped: the ingest contract is
+     * that a malformed row is skipped and the rest of the snapshot applied, and a
+     * null element would otherwise fail the whole push in {@code Flux.fromIterable}.
+     */
     public BridgeSyncRequest {
-        nodes = nodes == null ? null : Collections.unmodifiableList(new ArrayList<>(nodes));
-        rooms = rooms == null ? null : Collections.unmodifiableList(new ArrayList<>(rooms));
+        nodes = nodes == null ? null : Collections.unmodifiableList(withoutNulls(nodes));
+        rooms = rooms == null ? null : Collections.unmodifiableList(withoutNulls(rooms));
+    }
+
+    private static <T> List<T> withoutNulls(List<T> rows) {
+        List<T> kept = new ArrayList<>(rows.size());
+        for (T row : rows) {
+            if (Objects.nonNull(row)) {
+                kept.add(row);
+            }
+        }
+        return kept;
     }
 
     /** Unmodifiable view; the record never hands out its backing list. */
