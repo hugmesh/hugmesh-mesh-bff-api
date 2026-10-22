@@ -9,12 +9,18 @@
       hugmesh-mesh-bff-api's Liquibase changelog history — the platform's
       numeric-prefix + kebab-case-slug convention (mirrors mod-bff-api /
       admin-bff-api): the changeSet id is "<number>-<slug>" matching the filename
-      minus extension, author is always the literal "snapdragon". NOTE: kept as
-      "snapdragon" (not renamed to "hugmesh") deliberately — id+author+filename
-      is Liquibase's immutable changeset identity key, and any environment
-      where these changeSets already ran has that value recorded in its
-      DATABASECHANGELOG table; changing it would make Liquibase treat an
-      already-applied changeSet as new. See the HugMesh rebrand PR description.
+      minus extension, and the author is the literal "hugmesh".
+
+      AUTHOR RENAME: 001, 001b and 002 were first published under a different
+      author value. Liquibase identifies an applied changeSet by id + author +
+      filename, so on a database that ran them under the former author the
+      renamed changeSets look new. Each one therefore carries an
+      onFail="MARK_RAN" precondition on the schema object it creates (table or
+      CHECK constraint): on such a database Liquibase records it as run instead
+      of re-creating the object, and on a fresh database it runs normally. The
+      rows recorded under the former author are left in DATABASECHANGELOG
+      untouched. Proven by db.ChangelogAuthorRenameTest. A future changeSet
+      should never change id, author or filename once it has shipped.
 
       001-mesh-node-directory.xml   mesh_node_directory table (the radio telemetry
                                      directory.MeshDirectoryCache reloads from) + the

@@ -15,7 +15,16 @@
          canonical radio id), never database-generated, so writes go through
          directory.MeshNodeDirectoryDao's explicit upsert SQL, not a plain repository
          save(). -->
-    <changeSet id="001-mesh-node-directory" author="snapdragon">
+    <changeSet id="001-mesh-node-directory" author="hugmesh">
+        <!-- A database that applied this changeSet under its former author already
+             has the table: record it as run instead of re-creating it (see the
+             author note in db.changelog-master.xml). preConditions MUST be the first
+             child element of changeSet (XSD-enforced). -->
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="mesh_node_directory"/>
+            </not>
+        </preConditions>
         <createTable tableName="mesh_node_directory">
             <column name="node_id" type="varchar(16)">
                 <constraints primaryKey="true" nullable="false"/>
@@ -44,13 +53,22 @@
          (tolerant of case/missing "!" on input, folding to this canonical shape before
          it ever reaches this table); this DB-level CHECK is defence-in-depth against
          any OTHER write path this table ever grows. -->
-    <changeSet id="001b-mesh-node-directory-id-check" author="snapdragon">
+    <changeSet id="001b-mesh-node-directory-id-check" author="hugmesh">
         <!-- Postgres-only regex operator (~); the H2 (PG-compat) slice-test store does
              not support it identically, so this changeset is gated to Postgres and
              MARK_RAN elsewhere — the app-layer guard is still authoritative everywhere.
+             The sqlCheck also MARK_RANs it on a database that already carries the
+             constraint (applied under the former author; see db.changelog-master.xml).
+             information_schema is used rather than pg_constraint so the query is valid
+             on every database the dbms gate might be evaluated against.
              preConditions MUST be the first child element of changeSet (XSD-enforced). -->
         <preConditions onFail="MARK_RAN">
             <dbms type="postgresql"/>
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM information_schema.table_constraints
+                WHERE table_name = 'mesh_node_directory'
+                  AND constraint_name = 'ck_mesh_node_directory_id'
+            </sqlCheck>
         </preConditions>
         <sql>
             ALTER TABLE mesh_node_directory
