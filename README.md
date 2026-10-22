@@ -236,7 +236,8 @@ Paths are in `hugmesh-generator`, under `specs/cluster/` unless noted.
 ./mvnw -s settings.xml verify    # what the GitLab CI test job runs (./mvnw verify -B -s settings.xml)
 ```
 
-`.github/workflows/release.yml` is a manual image build and runs no tests.
+`.github/workflows/release.yml` builds and pushes the image and runs no tests
+(see Release below).
 
 `test` needs no live Postgres, Cassandra, Casdoor or user-bff, but Docker must
 run. The `test` Spring profile disables Liquibase and points R2DBC at a
@@ -255,6 +256,33 @@ make pentest         # SCA (OWASP Dependency-Check) + DAST; missing tooling or t
 make pentest-sca     # just the OWASP Dependency-Check self-scan (fails on CVSS >= 9)
 make pentest-dast    # authenticated ZAP + probes + nuclei, requires DAST_TARGET_URL
 ```
+
+## Release
+
+The version lives in one place: `pom.xml` `<project><version>`, currently
+`0.2.0-beta.1` (form `MAJOR.MINOR.PATCH-beta.N`, never `-SNAPSHOT`). The pom
+pins `hugmesh-parent 2.9.0-beta.1` and the `hugmesh-commons 2.2.0-beta.1`
+tests jar. The library chain (build-config, parent, commons) must publish both
+before the image can build.
+
+`.github/workflows/release.yml` pushes `ghcr.io/hugmesh/hugmesh-mesh-bff-api`:
+
+| Trigger | What is pushed |
+|---|---|
+| push to `main`, or a manual run on `main` | `:main`, `:sha-<12>` |
+| push of tag `v<version>`, or a manual run on that tag | `:<version>`, `:beta`, `:sha-<12>`, and a GitHub Release marked prerelease and not latest |
+| anything else | refused, nothing pushed |
+
+`scripts/release-version.sh` makes that decision. It refuses a tag that is not
+exactly `v` + the pom version. The image job also refuses to push a version
+that already exists in GHCR. A beta never moves `:latest`. Test the guard with
+`bash scripts/test-release-version.sh`.
+
+To publish a beta, merge the version change, then push an annotated tag
+`v<version>` on that `main` commit. Each job uses the runner list in the
+repository variable `RUNS_ON_PUBLISH` only for `main` and `v*` tags. In every
+other case, or when the variable is unset, it runs on GitHub-hosted
+`ubuntu-latest`.
 
 ## Layout
 
