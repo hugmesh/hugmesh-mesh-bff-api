@@ -10,7 +10,15 @@
          bridge.mappings). room_id is the bridge's own Matrix room id (app-assigned,
          never database-generated) — same upsert-via-explicit-SQL rationale as
          mesh_node_directory (see directory.MeshNodeDirectoryDao). -->
-    <changeSet id="002-mesh-room" author="snapdragon">
+    <changeSet id="002-mesh-room" author="hugmesh">
+        <!-- A database that applied this changeSet under its former author already
+             has the table: record it as run instead of re-creating it (see the
+             author note in db.changelog-master.xml). -->
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="mesh_room"/>
+            </not>
+        </preConditions>
         <createTable tableName="mesh_room">
             <column name="room_id" type="varchar(255)">
                 <constraints primaryKey="true" nullable="false"/>
