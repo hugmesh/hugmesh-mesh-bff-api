@@ -18,10 +18,18 @@ What it pins, and why:
     :latest anywhere in the workflow.
   * The existing gates stay: the cross-repo package preflight, the BuildKit
     packages_read_token secret, and the refuse-to-overwrite check on release runs.
+  * The refuse-to-overwrite step is EXECUTED, not just read: its run block runs the way the
+    runner runs it (no shell: key, so `bash -e {0}`) with `docker` stubbed on PATH. Image
+    absent -> the step continues; present -> it refuses; any other error -> it fails closed.
+    The pre-fix form (`out=$(...)` then `rc=$?`) is run the same way and must die on the
+    absent case, so the harness itself is proven able to see the defect.
   * Only the github-release job gets contents: write, and only on a release run.
 """
+import os
 import pathlib
+import subprocess
 import sys
+import tempfile
 
 try:
     import yaml
@@ -124,6 +132,77 @@ refuse = by_name.get("Refuse to overwrite a published version", {})
 check("release runs refuse to overwrite a published version",
       refuse.get("if") == "needs.version.outputs.kind == 'release'"
       and "imagetools inspect" in refuse.get("run", ""))
+
+# --- Execute the refuse-to-overwrite step under the shell the runner really uses. ---
+# With no `shell:` on the step and no defaults.run.shell, a Linux runner runs the block as
+# `bash -e {0}`. `set -uo pipefail` inside it does not turn -e off, so a bare failing
+# `out=$(...)` ends the step before its rc is ever looked at.
+OLD_PROBE = 'out=$(docker buildx imagetools inspect "${ref}" 2>&1)\nrc=$?'
+NEW_PROBE = 'rc=0\nout=$(docker buildx imagetools inspect "${ref}" 2>&1) || rc=$?'
+STUB = """#!/bin/sh
+printf '%s\\n' "$*" >> "$STUB_LOG"
+[ "$1 $2 $3" = "buildx imagetools inspect" ] || { echo "stub: unexpected docker $*" >&2; exit 97; }
+case "$STUB_MODE" in
+  present) echo "Name: $4"; echo "MediaType: application/vnd.oci.image.index.v1+json"; exit 0 ;;
+  absent) echo "ERROR: $4: not found" >&2; exit 1 ;;
+  manifest-unknown) echo "ERROR: MANIFEST_UNKNOWN: manifest unknown" >&2; exit 1 ;;
+  denied) echo "ERROR: denied: denied" >&2; exit 1 ;;
+  *) echo "stub: bad STUB_MODE" >&2; exit 98 ;;
+esac
+"""
+step_shell = (refuse.get("shell") or (image.get("defaults") or {}).get("run", {}).get("shell")
+              or (wf.get("defaults") or {}).get("run", {}).get("shell"))
+check("refuse-to-overwrite step sets no shell, so the runner uses `bash -e {0}`", step_shell is None)
+refuse_run = refuse.get("run", "")
+check("refuse-to-overwrite run block has no ${{ }} expressions (inputs arrive via env)",
+      "${{" not in refuse_run)
+check("refuse-to-overwrite probe uses the bash -e safe form, not a bare out=$(...); rc=$?",
+      NEW_PROBE in "\n".join(l.strip() for l in refuse_run.splitlines())
+      and "\nrc=$?" not in "\n".join(l.strip() for l in refuse_run.splitlines()))
+
+
+def run_refuse(body, mode):
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = pathlib.Path(tmp)
+        (tmp / "bin").mkdir()
+        stub = tmp / "bin" / "docker"
+        stub.write_text(STUB, encoding="utf-8")
+        stub.chmod(0o755)
+        script = tmp / "step.sh"
+        script.write_text(body, encoding="utf-8")
+        log = tmp / "docker.log"
+        env = dict(os.environ, PATH=f"{tmp / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
+                   IMAGE="ghcr.io/hugmesh/hugmesh-mesh-bff-api", VERSION="9.9.9-beta.1",
+                   STUB_MODE=mode, STUB_LOG=str(log))
+        p = subprocess.run(["bash", "-e", str(script)], env=env, capture_output=True, text=True,
+                           timeout=30)
+        calls = log.read_text(encoding="utf-8") if log.exists() else ""
+        return p.returncode, p.stdout + p.stderr, calls
+
+
+WANT_REF = "buildx imagetools inspect ghcr.io/hugmesh/hugmesh-mesh-bff-api:9.9.9-beta.1\n"
+if refuse_run:
+    OUTCOMES = ("is not published yet; continuing", "already exists in GHCR", "could not tell whether")
+    for mode, want_rc, marker in (("absent", 0, OUTCOMES[0]),
+                                  ("manifest-unknown", 0, OUTCOMES[0]),
+                                  ("present", 1, OUTCOMES[1]),
+                                  ("denied", 1, OUTCOMES[2])):
+        rc, out, calls = run_refuse(refuse_run, mode)
+        # Exactly one outcome line: the right one, and none of the other two.
+        ok = (rc == want_rc and calls == WANT_REF
+              and all((m in out) == (m == marker) for m in OUTCOMES))
+        check(f"refuse step under bash -e, image {mode}: exit {want_rc} with only '{marker}'", ok)
+        if not ok:
+            print(f"     got exit {rc}, docker calls {calls!r}, output:\n{out}", file=sys.stderr)
+    # The harness must be able to see the defect: the pre-fix form dies on a first publish.
+    flat = "\n".join(l.strip() for l in refuse_run.splitlines())
+    old_body = flat.replace(NEW_PROBE, OLD_PROBE)
+    rc, out, _ = run_refuse(old_body, "absent")
+    check("pre-fix probe form, image absent, under bash -e: dies before 'continuing' (harness sees the bug)",
+          old_body != flat and rc != 0 and "continuing" not in out)
+else:
+    check("refuse-to-overwrite step has a run block to execute", False)
+
 build = by_name.get("Build and push image", {}).get("with", {})
 check("image tags come only from the version guard",
       build.get("tags") == "${{ needs.version.outputs.tags }}")
