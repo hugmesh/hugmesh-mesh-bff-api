@@ -27,7 +27,7 @@
   <artifactId>mesh-bff</artifactId>
   <!-- Version scheme: MAJOR.MINOR.PATCH-beta.N, never SNAPSHOT. .github/workflows/release.yml
        reads this <version> (scripts/release-version.sh); a v<version> tag must match it. -->
-  <version>0.2.0-beta.1</version>
+  <version>0.4.0-beta.2</version>
 
   <dependencies>
     <!-- The shared, canonical HugMesh security/tenancy/config/web building blocks
