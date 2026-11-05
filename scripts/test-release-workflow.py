@@ -6,7 +6,8 @@ Run: python3 scripts/test-release-workflow.py   (needs PyYAML; fails, never skip
 What it pins, and why:
   * No pull_request / pull_request_target trigger. This workflow holds packages:write and may
     run on the self-hosted runner; a PR must never reach it.
-  * Triggers are exactly: push to main, push of v* tags, workflow_dispatch.
+  * Triggers are exactly: push to main and release/** (release/X.Y branch runs), push of v*
+    tags, workflow_dispatch.
   * version and github-release use the one runs-on line that picks vars.RUNS_ON_PUBLISH only
     for a non-PR event on main or a v* / studio-v* tag, and ubuntu-latest otherwise.
   * The image job (build, push, sign) runs on the GitHub-hosted ubuntu-latest, written
@@ -68,7 +69,7 @@ check("triggers are exactly push, workflow_dispatch",
 check("no pull_request or pull_request_target trigger anywhere",
       isinstance(on, dict) and not ({"pull_request", "pull_request_target"} & set(on)))
 push = (on or {}).get("push") or {}
-check("push runs on branch main only", push.get("branches") == ["main"])
+check("push runs on branches main and release/** only", push.get("branches") == ["main", "release/**"])
 check("push runs on v* tags only", push.get("tags") == ["v*"])
 
 check("workflow default permissions are contents: read only",
@@ -172,7 +173,7 @@ def run_refuse(body, mode):
         script.write_text(body, encoding="utf-8")
         log = tmp / "docker.log"
         env = dict(os.environ, PATH=f"{tmp / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
-                   IMAGE="ghcr.io/hugmesh/hugmesh-mesh-bff-api", VERSION="9.9.9-beta.1",
+                   IMAGE="ghcr.io/hugmesh/hugmesh-mesh-bff-api", VERSION="9.9.9-beta.1", CHANNEL="beta",
                    STUB_MODE=mode, STUB_LOG=str(log))
         p = subprocess.run(["bash", "-e", str(script)], env=env, capture_output=True, text=True,
                            timeout=30)

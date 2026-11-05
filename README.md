@@ -236,8 +236,8 @@ Paths are in `hugmesh-generator`, under `specs/cluster/` unless noted.
 ./mvnw -s settings.xml verify    # what the GitLab CI test job runs (./mvnw verify -B -s settings.xml)
 ```
 
-`.github/workflows/release.yml` builds and pushes the image and runs no tests
-(see Release below).
+`.github/workflows/release.yml` builds and pushes the image. It runs no Maven
+tests, only its own release self-tests (see Release below).
 
 `test` needs no live Postgres, Cassandra, Casdoor or user-bff, but Docker must
 run. The `test` Spring profile disables Liquibase and points R2DBC at a
@@ -270,19 +270,33 @@ before the image can build.
 | Trigger | What is pushed |
 |---|---|
 | push to `main`, or a manual run on `main` | `:main`, `:sha-<12>` |
-| push of tag `v<version>`, or a manual run on that tag | `:<version>`, `:beta`, `:sha-<12>`, and a GitHub Release marked prerelease and not latest |
-| anything else | refused, nothing pushed |
+| push to `release/X.Y`, or a manual run on it | `:sha-<12>` only (pom must be `X.Y.*`) |
+| tag `vX.Y.Z-beta.N` on a `main` commit (beta channel) | `:X.Y.Z-beta.N`, `:sha-<12>`, `:beta`, and a GitHub Release marked prerelease and not latest |
+| tag `vX.Y.Z` on a `release/X.Y` commit (stable channel) | `:X.Y.Z`, `:sha-<12>`, `:X.Y`, plus `:latest` only when `X.Y` is the newest stable line; a full GitHub Release, marked Latest in that same case |
+| any other tag (`-rc.N`, a beta off `main`, a stable off its `release/X.Y`), or anything else | refused, nothing pushed |
 
-`scripts/release-version.sh` makes that decision. It refuses a tag that is not
-exactly `v` + the pom version. The image job also refuses to push a version
-that already exists in GHCR. A beta never moves `:latest`. Test the guard with
-`bash scripts/test-release-version.sh`.
+`scripts/release-version.sh` makes that decision. The tag decides the channel,
+and it must be exactly `v` + the pom version. A patch on an older stable line
+moves its `:X.Y` but never `:latest`, and a stable older than an existing patch
+of its line is refused. The image job refuses to push a version that already
+exists in GHCR: `:X.Y.Z` and `:X.Y.Z-beta.N` are immutable, while `:beta`,
+`:X.Y` and `:latest` move. Right before the build it asks the guard again from
+the tags on origin, so a "Re-run failed jobs" can never move `:latest` or `:X.Y`
+backwards. After signing it checks that every pushed tag resolves to the signed
+digest. The version job runs the self-tests first:
+
+```
+bash scripts/test-release-version.sh       # the guard, against a throwaway git repository
+python3 scripts/test-release-workflow.py   # release.yml shape (needs PyYAML)
+python3 scripts/test-release-channels.py   # release.yml steps per channel, docker and gh stubbed
+```
 
 To publish a beta, merge the version change, then push an annotated tag
-`v<version>` on that `main` commit. Each job uses the runner list in the
-repository variable `RUNS_ON_PUBLISH` only for `main` and `v*` tags. In every
-other case, or when the variable is unset, it runs on GitHub-hosted
-`ubuntu-latest`.
+`vX.Y.Z-beta.N` on that `main` commit. A stable `vX.Y.Z` is tagged on its
+`release/X.Y` branch. Each job uses the runner list in the repository variable
+`RUNS_ON_PUBLISH` only for `main` and `v*` tags. In every other case
+(`release/X.Y` pushes included), or when the variable is unset, it runs on
+GitHub-hosted `ubuntu-latest`.
 
 ## Layout
 
