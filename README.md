@@ -265,7 +265,9 @@ pins `hugmesh-parent 2.9.0-beta.1` and the `hugmesh-commons 2.2.0-beta.1`
 tests jar. The library chain (build-config, parent, commons) must publish both
 before the image can build.
 
-`.github/workflows/release.yml` pushes `g| Trigger | What is pushed |
+`.github/workflows/release.yml` pushes `ghcr.io/hugmesh/hugmesh-mesh-bff-api`:
+
+| Trigger | What is pushed |
 |---|---|
 | push to `main`, or a manual run on `main` | `:main`, `:sha-<12>` |
 | push to `release/X.Y`, or a manual run on it | `:sha-<12>` only (pom must be `X.Y.*`) |
@@ -295,9 +297,6 @@ To publish a beta, merge the version change, then push an annotated tag
 `RUNS_ON_PUBLISH` only for `main` and `v*` tags. In every other case
 (`release/X.Y` pushes included), or when the variable is unset, it runs on
 GitHub-hosted `ubuntu-latest`.
-
-uns on GitHub-hosted
-`ubuntu-latest`.
 
 ## Layout
 
