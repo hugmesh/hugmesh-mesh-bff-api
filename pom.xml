@@ -14,7 +14,7 @@
   <parent>
     <groupId>net.hugmesh</groupId>
     <artifactId>hugmesh-parent</artifactId>
-    <version>2.9.0-beta.1</version>
+    <version>2.10.0-beta.1</version>
     <relativePath/>
   </parent>
 
@@ -27,7 +27,7 @@
   <artifactId>mesh-bff</artifactId>
   <!-- Version scheme: MAJOR.MINOR.PATCH-beta.N, never SNAPSHOT. .github/workflows/release.yml
        reads this <version> (scripts/release-version.sh); a v<version> tag must match it. -->
-  <version>0.4.0-beta.2</version>
+  <version>0.5.0-beta.1</version>
 
   <dependencies>
     <!-- The shared, canonical HugMesh security/tenancy/config/web building blocks
@@ -42,12 +42,12 @@
 
     <!-- commons test-support base classes (PostgresTestSupport) for full-context
          Testcontainers-backed integration tests. The parent's dependencyManagement does NOT
-         manage the tests classifier, so the version is explicit here: 2.2.0-beta.1, the same
-         commons coordinate hugmesh-parent 2.9.0-beta.1 manages as hugmesh-commons.version. -->
+         manage the tests classifier, so the version is explicit here: 2.3.0-beta.1, the same
+         commons coordinate hugmesh-parent 2.10.0-beta.1 manages as hugmesh-commons.version. -->
     <dependency>
       <groupId>net.hugmesh</groupId>
       <artifactId>hugmesh-commons</artifactId>
-      <version>2.2.0-beta.1</version>
+      <version>2.3.0-beta.1</version>
       <classifier>tests</classifier>
       <scope>test</scope>
     </dependency>
